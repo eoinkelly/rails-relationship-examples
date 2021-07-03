@@ -9,45 +9,37 @@ This repo is my attempt to clarify some best practices for myself around:
 
 ## Clear thinking and communicating
 
-We often have reason to draw and discuss database schemas on whiteboards etc.
+We often discuss database schemas, draw them on on whiteboards etc.
 
-* Common terms in discussion
-    * "has many"
-    * "has one"
+Common terms in discussion I have heard and used are  _"has many"_, _"has one"_ etc.
 * Common terms in drawing
     * (arrow with filled in head)
     * line with 1 or * at either end
     * line with nothing at one end and * at the other
 
-but these are very ambiguous.
+but these are all a bit ambiguous, mostly because they don't tell you what should happen in the "zero case" e.g. does _"A has one B"_ mean "A has exactly one B" or _"A usually has one B but might have none"_
 
-Imagine you have a diagram with _posts_ and _authors_ then move to something more absract like _A_ and _B_ to demonstrate how much of the clarity depends on knowledge of the domain which only *might* be there!
+Fuzzy terms can be _ok_ if we already have knowledge of the domain e.g. if the diagram has _posts_ and _authors_ then we already know some things about how that should behave in the real world.
 
-So "has one" can mean:
+However we aren't always working with a domain that we understand. If, for example, the diagram is about something more abstract like _A_ and _B_ then we have to rely solely on what's in the diagram rather than expertise we already have on the domain.
 
-    has 0 or 1
-    has exactly 1
+We sometimes use `*` to mean "many" in diagrams but I think we shouldn't because it is ambiguous.
 
-and "has many" can mean:
+Coming from a developer background, we are a bit primed to think of `*` as meaning _0 to many_ because that is how it reads in a regular expression but it's not clear in data modelling whether it could also mean _"one to many"_.
 
-    has 0 to many
-    has 1 to many
+### Relationships come in pairs
 
+Relationships always appear in pairs. Every relationship has an "inverse relationship" which goes in the opposite direction. Relationships are _"bidirectional"_. Our language and diagrams should reflect this.
 
-We need to abandon `*` to mean "many" - it is ambiguous. `*` in reg exps
-means 0-many but it's not clear in data modelling whether it also means 1-many.
+Instead of saying
 
-### A better way: define a relationship pair
+> What is the relationship between Author and Post?
 
-* a relationship always has a direction
-* relationships always appear in pairs
-  * every relationship has an "inverse relationship" which goes in the opposite direction
+we should say
 
-Instead of saying _"What is the relationship between Author and Post?_ we say _"There are a pair of relationships between Author and Post. What are they?"_
+> There are a pair of relationships between Author and Post. What are they?
 
 When we draw how entities are connected we know we are actually drawing **a pair** of relationships.
-
-Draw the relationship so that the relationship label describes the relationship that the distant has with the near
 
 In my (crude) diagrams below, you should read
 
@@ -61,15 +53,14 @@ as
 
 ### How many possible kinds of relationship?
 
-Consider a single directed relationship between a and b. There are 4 possible relationships:
+Consider a single directed relationship from A to B. There are 4 possible kinds of relationship:
 
-1. a has at most one b (0..1)
-1. a has exactly on b (1)
-1. a has at least one b (1..N)
-1. a has 0 to many b (0..N)
+1. A has at most one B (0..1)
+1. A has exactly one B (1)
+1. A has at least one B (1..N)
+1. A has 0 to many B (0..N)
 
-There are 4 cases. There are also 4 cases in the reverse direction. This means
-there are  16 possible kinds of bi-directional relationship.
+There are 4 cases. There are also 4 cases in the reverse direction from B to A. This means there are 16 possible kinds of bidirectional relationship.
 
 These are the 16 possible bidirectional relationships:
 
@@ -90,9 +81,7 @@ These are the 16 possible bidirectional relationships:
     15. [A]{1..N}------{0..N}[B] (flip of 12.)
     16. [A]{0..N}------{0..N}[B]
 
-Of the 16 possible combinations, there are only 10 unique combinations. We don't
-count a bidirectional that is just the reverse direction of some other
-bidirectional as being a unique kind of bidirectional
+Of the 16 possible combinations, there are only 10 unique combinations. We don't count a bidirectional that is just the reverse direction of some other bidirectional as being a unique kind of bidirectional.
 
 These are the 10 unique kinds of bidirectional relationship possible:
 
@@ -107,6 +96,9 @@ These are the 10 unique kinds of bidirectional relationship possible:
     9.  [A]{0..N}------{1..N}[B]
     10. [A]{0..N}------{0..N}[B]
 
+So this is the toolbox we can use. There are only 10 possible kinds of bidirectional relationship so all the schemas we discuss, diagram and build will be some combination of these.
+
+Next we should look at how to implement these in Rails.
 
 ## Modelling the 10 kinds of relationship in Rails
 
