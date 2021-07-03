@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/audit-app/config.schema.json",
+  "ignore": [
+    "1751|webpack-dev-server>chokidar>glob-parent",
+    "1751|@rails/webpacker>webpack>watchpack>watchpack-chokidar2>chokidar>glob-parent",
+    "1751|webpack>watchpack>watchpack-chokidar2>chokidar>glob-parent",
+    "1754|@rails/webpacker>optimize-css-assets-webpack-plugin>cssnano>cssnano-preset-default>postcss-svgo>svgo>css-select>css-what"
+  ]
+}
