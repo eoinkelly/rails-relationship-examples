@@ -126,82 +126,33 @@ We should think of rails validations as "advisory" rather than "enforcing" becau
 
 ### 1. {0..1} to {0..1}
 
-Summary of changes by layer:
+    [Alfa]{0..1} ---- {0..1}[Bravo]
 
-* Relationship macro layer
-    * Explicitly choose a `dependent` option based on the behaviour you want in your app
-* Validation layer
-    * Since both sides of the relationship can be 0 there are no validations required
-* Migration layer
-    * Set `foreign_key: true` because it's not set by default
+Rails implements this using the `belongs_to` and `has_one` macros. We need to decide which model should get the `belongs_to`.
 
-Example:
+It doesn't really matter where we put the `belongs_to` to implement this relationship (it will matter for some of the other relationships) so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
 
-```ruby
-# app/models/captain.rb
-class Captain < ApplicationRecord
-  belongs_to :starship,
-    # Setting inverse_of is generally a good practice
-    inverse_of: :captain,
-    # Rails by default will fail the validation of a belongs_to if it's
-    # association is not present so `optional: true` is required to create a
-    # 0..1 relationship.
-    optional: true,
+Things to watch out for:
 
-    # TODO: choose the most appropriate value for `dependent` option
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
+* Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option in the migration.
+* Rails will validate a `belongs_to` relationship by default but not a `has_one` so we need `belongs_to(..., optional: true)`
 
-# app/models/starship.rb
-class Starship < ApplicationRecord
-  has_one :captain,
-    # Setting inverse_of is generally a good practice
-    inverse_of: :starship,
-    # TODO: choose the most appropriate value for `dependent` option
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
+Annotated Code changes:
 
-# db/migrate/20210702203400_create_relationship_between_captain_and_starship.rb
-class CreateRelationshipBetweenCaptainsAndStarship < ActiveRecord::Migration[6.0]
-  def change
-    add_reference :captains, :starship, foreign_key: true
-    # the line above does the following:
-    #
-    # * captains.starship_id with type bigint (the default type so we don't have to specify it)
-    # * Allows captains.starship_id to be NULL (we need this because the relationship is optional)
-    # * creates an index on captains.starship_id but it does not enforce uniqueness i.e. index is for performance
-    # * create a foreign key constraint on captains.starship_id to reference starships.id. This is not the default but should be i think
+* Rails layer (sugar and advisory constraints)
+    * [app/models/alfa.rb](app/models/alfa.rb)
+    * [app/models/bravo.rb](app/models/bravo.rb)
+* Database layer (enforcing constraints)
+    * [db/migrate/20210704020236_create_alfas.rb](db/migrate/20210704020236_create_alfas.rb)
+    * [db/migrate/20210704020238_create_bravos.rb](db/migrate/20210704020238_create_bravos.rb)
+    * [db/migrate/20210704022223_connect_alfa_and_bravo.rb](db/migrate/20210704022223_connect_alfa_and_bravo.rb)
 
-    # Before:
-    # trek_development=# \d captains
-    #                                           Table "public.captains"
-    #    Column   |              Type              | Collation | Nullable |               Default
-    #  to + to + to + to + to
-    #  id         | bigint                         |           | not null | nextval('captains_id_seq'::regclass)
-    #  name       | character varying              |           |          |
-    #  created_at | timestamp(6) without time zone |           | not null |
-    #  updated_at | timestamp(6) without time zone |           | not null |
-    # Indexes:
-    #     "captains_pkey" PRIMARY KEY, btree (id)
-    #
-    # After:
-    # trek_development=# \d captains
-    #                                           Table "public.captains"
-    #    Column    |              Type              | Collation | Nullable |               Default
-    #  to + to + to + to + to
-    #  id          | bigint                         |           | not null | nextval('captains_id_seq'::regclass)
-    #  name        | character varying              |           |          |
-    #  created_at  | timestamp(6) without time zone |           | not null |
-    #  updated_at  | timestamp(6) without time zone |           | not null |
-    #  starship_id | bigint                         |           |          |
-    # Indexes:
-    #     "captains_pkey" PRIMARY KEY, btree (id)
-    #     "index_captains_on_starship_id" btree (starship_id)
-    # Foreign to key constraints:
-    #     "fk_rails_1b9763e7e6" FOREIGN KEY (starship_id) REFERENCES starships(id)
-  end
-end
-```
+Rate the outcome:
+
+| Q                                                              | A   |
+| -------------------------------------------------------------- | --- |
+| Can this relationship be broken by skipping Rails validations? | No  |
+
 
 ### 2. {1} to {0..1}
 
