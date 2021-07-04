@@ -9,39 +9,50 @@ This repo is my attempt to clarify some best practices for myself around:
 
 ## Clear thinking and communicating
 
+> The Biggest Problem in Communication Is the Illusion That It Has Taken Place
+
 We often discuss database schemas, draw them on on whiteboards etc.
 
 Common terms in discussion I have heard and used are  _"has many"_, _"has one"_ etc.
-* Common terms in drawing
-    * (arrow with filled in head)
-    * line with 1 or * at either end
-    * line with nothing at one end and * at the other
+In drawings we often use
 
-but these are all a bit ambiguous, mostly because they don't tell you what should happen in the "zero case" e.g. does _"A has one B"_ mean "A has exactly one B" or _"A usually has one B but might have none"_
+* An warrow with filled in head to indicate "many"
+* line with `1` or `*` at either end
+* line with nothing at one end and `*` at the other
+
+I think should avoid these phrases and notations because they are ambigious. They are ambigious because:
+
+1. they don't tell you what should happen in the "zero case" e.g. does _"A has one B"_ mean "A has exactly one B" or _"A usually has one B but might have none"_.
+1. Coming from a developer background, we are a bit primed to think of `*` as meaning _0 to many_ because that is how it reads in a regular expression but not everybody involved in data modelling is a developer. It seems common in data modelling for it to mean
+ _"one to many"_.
 
 Fuzzy terms can be _ok_ if we already have knowledge of the domain e.g. if the diagram has _posts_ and _authors_ then we already know some things about how that should behave in the real world.
 
 However we aren't always working with a domain that we understand. If, for example, the diagram is about something more abstract like _A_ and _B_ then we have to rely solely on what's in the diagram rather than expertise we already have on the domain.
 
-We sometimes use `*` to mean "many" in diagrams but I think we shouldn't because it is ambiguous.
+### Confusion around what "relationship" actually means
 
-Coming from a developer background, we are a bit primed to think of `*` as meaning _0 to many_ because that is how it reads in a regular expression but it's not clear in data modelling whether it could also mean _"one to many"_.
+When we talk about "relationships" in data modelling, we usually refeerring to a pair of relationships
 
-### Relationships come in pairs
+Every relationship has an "inverse relationship" which goes in the opposite direction.
+This "relationship pair" is often called a _bidirectional relationship_. Don't let the singular fool you, a bidirectional relationship is actually two single direction relationships.
 
-Relationships always appear in pairs. Every relationship has an "inverse relationship" which goes in the opposite direction. Relationships are _"bidirectional"_. Our language and diagrams should reflect this.
+Relationships are _"bidirectional"_.
+Our language and diagrams should reflect this.
 
-Instead of saying
+Relationships always appear in pairs. We call the pair a bidirectional relationship.
+
+Instead of saying:
 
 > What is the relationship between Author and Post?
 
-we should say
+we should probably say something like:
 
 > There are a pair of relationships between Author and Post. What are they?
 
 When we draw how entities are connected we know we are actually drawing **a pair** of relationships.
 
-In my (crude) diagrams below, you should read
+My (crude) diagrams below attempt to capture this. You can read them as follows:
 
     [A]{r1}----------------{r2}[B]
 
@@ -51,14 +62,17 @@ as
     A has r2 B
     B has r1 A
 
+
+    TODO: research what UML says here and decide whether it's more useful than my informal stuff
+
 ### How many possible kinds of relationship?
 
-Consider a single directed relationship from A to B. There are 4 possible kinds of relationship:
+Consider a single directed relationship from entity A to entity B. There are 4 possible kinds of single direction relationship:
 
-1. A has at most one B (0..1)
-1. A has exactly one B (1)
-1. A has at least one B (1..N)
-1. A has 0 to many B (0..N)
+1. A has at most one B (notated as `0..1`)
+1. A has exactly one B (notated as `1`)
+1. A has at least one B (notated as `1..N`)
+1. A has 0 to many B (notated as `0..N`)
 
 There are 4 cases. There are also 4 cases in the reverse direction from B to A. This means there are 16 possible kinds of bidirectional relationship.
 
@@ -81,7 +95,7 @@ These are the 16 possible bidirectional relationships:
     15. [A]{1..N}------{0..N}[B] (flip of 12.)
     16. [A]{0..N}------{0..N}[B]
 
-Of the 16 possible combinations, there are only 10 unique combinations. We don't count a bidirectional that is just the reverse direction of some other bidirectional as being a unique kind of bidirectional.
+Of the 16 possible combinations, there are only 10 unique combinations if we remove relationships which differ only in their direction.
 
 These are the 10 unique kinds of bidirectional relationship possible:
 
@@ -96,33 +110,37 @@ These are the 10 unique kinds of bidirectional relationship possible:
     9.  [A]{0..N}------{1..N}[B]
     10. [A]{0..N}------{0..N}[B]
 
-So this is the toolbox we can use. There are only 10 possible kinds of bidirectional relationship so all the schemas we discuss, diagram and build will be some combination of these.
+So, whether we knew it before now or not, these 10 relationships are the toolbox we use to create data models. There are only 10 possible kinds of bidirectional relationship so all the schemas we discuss, diagram and build will be some combination of these.
 
 Next we should look at how to implement these in Rails.
 
 ## Modelling the 10 kinds of relationship in Rails
 
 1.  `{0..1} to {0..1}`
-    * default for `has_one`, `belongs_to`
+    * default for `has_one`, `belongs_to` combination
 2.  `{1} to {0..1}`
 3.  `{1..N} to {0..1}`
 4.  `{0..N} to {0..1}`
-       * default for `has_many`, `belongs_to`
+       * default for `has_many`, `belongs_to` combination
 5.  `{1} to {1}`
 6.  `{1..N} to {1}`
 7.  `{0..N} to {1}`
 8.  `{1..N} to {1..N}`
 9.  `{0..N} to {1..N}`
 10. `{0..N} to {0..N}`
-    * default for `has_and_belongs_to_many`
+    * default for `has_and_belongs_to_many` or `has_many(through:...)` pair
+
+Notice that the relationships Rails creates include the zero case by default i.e. you have to do a bit extra to prevent a relationship from being empty.
 
 Rails implements relationships with a mixture of the following tools:
 
-* Relationship macros e.g. `belongs_to`, `has_one` etc. and the options you pass to them
-* Model validations
-* Database constraints created in migrations
+1. Relationship macros e.g. `belongs_to`, `has_one` etc. and the options you pass to them
+1. Model validations
+1. Database constraints created in migrations
 
-We should think of rails validations as "advisory" rather than "enforcing" because they can be skipped. Therefore the best outcome for implementing a relationship will use **both** Rails validations **and** Database constraints.
+We should think of rails validations as "advisory" rather than "enforcing" because they can be skipped.
+
+Therefore the best outcome for implementing a relationship will use **both** Rails validations **and** Database constraints. This isn't always feasible to achieve, usually for performance reasons or because the implementation would be very fiddly.
 
 ### 1. {0..1} to {0..1}
 
@@ -143,8 +161,6 @@ Annotated Code changes:
     * [app/models/alfa.rb](app/models/alfa.rb)
     * [app/models/bravo.rb](app/models/bravo.rb)
 * Database layer (enforcing constraints)
-    * [db/migrate/20210704020236_create_alfas.rb](db/migrate/20210704020236_create_alfas.rb)
-    * [db/migrate/20210704020238_create_bravos.rb](db/migrate/20210704020238_create_bravos.rb)
     * [db/migrate/20210704022223_connect_alfa_and_bravo.rb](db/migrate/20210704022223_connect_alfa_and_bravo.rb)
 
 Rate the outcome:
