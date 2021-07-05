@@ -14,8 +14,8 @@ This repo is my attempt to clarify some best practices for myself around:
   - [Modelling the 10 kinds of relationship in Rails](#modelling-the-10-kinds-of-relationship-in-rails)
     - [1. {0..1} to {0..1}](#1-01-to-01)
     - [2. {1} to {0..1}](#2-1-to-01)
-      - [Making the entity with belongs_to have exactly one of the has_one entity](#making-the-entity-with-belongs_to-have-exactly-one-of-the-has_one-entity)
-      - [Making the entity with has_one have exactly one of the belongs_to entity](#making-the-entity-with-has_one-have-exactly-one-of-the-belongs_to-entity)
+      - [When you can freely choose which model gets belongs_to](#when-you-can-freely-choose-which-model-gets-belongs_to)
+      - [When you can have no choice about which model gets the belongs_to](#when-you-can-have-no-choice-about-which-model-gets-the-belongs_to)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
     - [4. {0..N} to {0..1}](#4-0n-to-01)
     - [5. {1} to {1}](#5-1-to-1)
@@ -167,9 +167,11 @@ Therefore the best outcome for implementing a relationship will use **both** Rai
 
     [Alfa]{0..1} ---- {0..1}[Bravo]
 
-Rails implements this using the `belongs_to` and `has_one` macros. We need to decide which model should get the `belongs_to`.
+Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
-It doesn't really matter where we put the `belongs_to` to implement this relationship (it will matter for some of the other relationships) so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
+It doesn't really matter where we put the `belongs_to` to implement this relationship (it will matter for some of the other relationships) .
+
+In our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`
 
 Things to watch out for:
 
@@ -184,120 +186,83 @@ Annotated Code changes:
 * Database layer (enforcing constraints)
     * [db/migrate/20210704022223_connect_alfa_and_bravo.rb](db/migrate/20210704022223_connect_alfa_and_bravo.rb)
 
-Rate the outcome:
+Implementation score card:
 
 | Q                                           | A                  |
 | ------------------------------------------- | ------------------ |
 | Relationship integrity enforced by Database | :white_check_mark: |
-
+| Recommended                                 | :white_check_mark: |
 
 ### 2. {1} to {0..1}
 
-This is much easier and more effective to make the `belongs_to` side have
-exactly one `has_one` side. Doing it the other way around is possible but less
-effective (see below)
+Consider the following relationship
 
-#### Making the entity with belongs_to have exactly one of the has_one entity
+    [A]{1} to {0..1}[B]
 
-Summary of changes by layer:
+which reads as
 
-* Relationship macro layer
-    * don't set `optional: true` on the belongs_to side  to  we want to validate the association
-* Validation layer
-    * No code required
-* Migration layer
-    * Set `foreign_key: true` because it's not set by default
-    * set `null: false` to enforce that the belongs_to side must have a relationship
+    A has 0..1 B
+    B has exactly 1 A
 
-Example:
+Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros. Does it matter which model we put the `belongs_to` in? Yes.
 
-```ruby
-# app/models/captain.rb
-class Captain < ApplicationRecord
-  belongs_to :starship,
-    inverse_of: :captain,
-    optional: false, # is false by default but explicitly setting it anyway
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
+The model with the `belongs_to` macro will have an extra column added to its database table. That column contains the id of the related record in the other table.
 
-# app/models/starship.rb
-class Starship < ApplicationRecord
-  has_one :captain,
-    inverse_of: :starship,
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
+We can then create a database constraint (remember, those are the "enforcing" kind) which says that the new column cannot be empty. This effectively requires that the relationship exist and the database will refuse to save a record which violates this rule.
 
-# db/migrate/20210702203400_create_relationship_between_captain_and_starship.rb
-class CreateRelationshipBetweenCaptainsAndStarship < ActiveRecord::Migration[6.0]
-  def change
-    add_reference :captains, :starship, foreign_key: true, null: false
-    # the line above does the following:
-    #
-    # * captains.starship_id with type bigint (the default type so we don't have to specify it)
-    # * Create a constraint to prevent captains.starship_id from being NULL (we need this)
-    # * creates an index on captains.starship_id but it does not enforce uniqueness i.e. index is for performance
-    # * create a foreign key constraint on captains.starship_id to reference starships.id.
-  end
-end
-```
+However, the other database table has no extra column so we have nothing to apply a database constraint to. It is _technically_ possible to create such a constraint with a database trigger but it's not common to do so.
 
-Rate the outcome:
+The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at the database layer, we must put the new column (the foreign key) in the table which has the `{1}` half of the bidirectional relationship. Hence, we must put the `belongs_to` in the model that is the `{1}`
+
+Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
+
+#### When you can freely choose which model gets belongs_to
+
+* See the discussion above about how to choose which model gets the `belongs_to`
+* Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option in the migration.
+
+Annotated Code changes:
+
+* Rails layer (relationship and validation macros)
+    * [app/models/charlie.rb](app/models/charlie.rb)
+    * [app/models/deltum.rb](app/models/deltum.rb)
+* Database layer (enforcing constraints)
+    * [db/migrate/20210705071426_connect_charlie_and_deltum.rb](db/migrate/20210705071426_connect_charlie_and_deltum.rb)
+
+Implementation score card:
 
 | Q                                           | A                  |
 | ------------------------------------------- | ------------------ |
 | Relationship integrity enforced by Database | :white_check_mark: |
+| Recommended                                 | :white_check_mark: |
 
-#### Making the entity with has_one have exactly one of the belongs_to entity
+#### When you can have no choice about which model gets the belongs_to
 
-This is more fiddly and less effective so avoid it if you can
+WARNING: **Don't use this implementation unless you absolutely have to!**
 
-* Relationship macro layer
-    * set required: true option on has_one
-* Validation layer
-* Migration layer
-    * we can't enforce it in sql without doing something exotic
-    * "before you save record in B, check that there is a record in A which references it"
-        * chicken & egg problem, could work around with deferred constraints I guess but big faff
-* CONCLUSION: you can do it at the Rails layer but not at the DB layer so it's not ideal
+This implementation is inferior to the option above. See the discussion above about
+how to choose which model gets the `belongs_to` for details.
+
+Things to watch out for:
+
+* You must set `belongs_to(..., optional: true)` to make that side of the relationship `{0..1}`.
+* You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
+* You must set `has_one(..., required: true)` to make that side of the relationship `{1}`. Note this causes Rails to create a validation but does not add any database enforcement of the relationship.
 
 Example:
 
-```ruby
-# app/models/captain.rb
-class Captain < ApplicationRecord
-  belongs_to :starship,
-    inverse_of: :captain,
-    optional: true, # needed
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
-
-# app/models/starship.rb
-class Starship < ApplicationRecord
-  has_one :captain,
-    inverse_of: :starship,
-    required: true, # needed to make
-    dependent: nil # nil(default)|destroy|destroy_async|delete|nullify|restrict_with_exception|restrict_with_error
-end
-
-# db/migrate/20210702203400_create_relationship_between_captain_and_starship.rb
-class CreateRelationshipBetweenCaptainsAndStarship < ActiveRecord::Migration[6.0]
-  def change
-    add_reference :captains, :starship, foreign_key: true, null: true
-    # the line above does the following:
-    #
-    # * captains.starship_id with type bigint (the default type so we don't have to specify it)
-    # * Allow captains.starship_id to be NULL
-    # * creates an index on captains.starship_id but it does not enforce uniqueness i.e. index is for performance
-    # * create a foreign key constraint on captains.starship_id to reference starships.id.
-  end
-end
-```
+* Rails layer (relationship and validation macros)
+    * [app/models/echo.rb](app/models/echo.rb)
+    * [app/models/foxtrot.rb](app/models/foxtrot.rb)
+* Database layer (enforcing constraints)
+    * [db/migrate/20210705075149_connect_echo_to_foxtrot.rb](db/migrate/20210705075149_connect_echo_to_foxtrot.rb)
 
 Implementation score card:
 
 | Q                                           | A   |
 | ------------------------------------------- | --- |
 | Relationship integrity enforced by Database | :x: |
+| Recommended                                 | :x: |
 
 ### 3. {1..N} to {0..1}
 

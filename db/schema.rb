@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2021_07_04_022223) do
+ActiveRecord::Schema.define(version: 2021_07_05_075149) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -27,5 +27,31 @@ ActiveRecord::Schema.define(version: 2021_07_04_022223) do
     t.datetime "updated_at", precision: 6, null: false
   end
 
+  create_table "charlies", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.bigint "deltum_id", null: false
+    t.index ["deltum_id"], name: "index_charlies_on_deltum_id"
+  end
+
+  create_table "delta", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+  end
+
+  create_table "echos", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+    t.bigint "foxtrot_id"
+    t.index ["foxtrot_id"], name: "index_echos_on_foxtrot_id"
+  end
+
+  create_table "foxtrots", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+  end
+
   add_foreign_key "alfas", "bravos"
+  add_foreign_key "charlies", "delta"
+  add_foreign_key "echos", "foxtrots"
 end
