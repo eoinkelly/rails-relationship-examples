@@ -7,6 +7,27 @@ This repo is my attempt to clarify some best practices for myself around:
 1. Clear thinking and clear communicating around data modelling
 2. Implementing those models in Rails in the best way possible
 
+- [Modelling relationships between database entities](#modelling-relationships-between-database-entities)
+  - [Clear thinking and communicating](#clear-thinking-and-communicating)
+    - [Confusion around what "relationship" actually means](#confusion-around-what-relationship-actually-means)
+  - [How many possible kinds of relationship?](#how-many-possible-kinds-of-relationship)
+  - [Modelling the 10 kinds of relationship in Rails](#modelling-the-10-kinds-of-relationship-in-rails)
+    - [1. {0..1} to {0..1}](#1-01-to-01)
+    - [2. {1} to {0..1}](#2-1-to-01)
+      - [Making the entity with belongs_to have exactly one of the has_one entity](#making-the-entity-with-belongs_to-have-exactly-one-of-the-has_one-entity)
+      - [Making the entity with has_one have exactly one of the belongs_to entity](#making-the-entity-with-has_one-have-exactly-one-of-the-belongs_to-entity)
+    - [3. {1..N} to {0..1}](#3-1n-to-01)
+    - [4. {0..N} to {0..1}](#4-0n-to-01)
+    - [5. {1} to {1}](#5-1-to-1)
+    - [6. {1..N} to {1}](#6-1n-to-1)
+    - [7. {0..N} to {1}](#7-0n-to-1)
+    - [8. {1..N} to {1..N}](#8-1n-to-1n)
+    - [9. {0..N} to {1..N}](#9-0n-to-1n)
+    - [10. {0..N} to {0..N}](#10-0n-to-0n)
+      - [Using habtm](#using-habtm)
+      - [Using has_many through:](#using-has_many-through)
+  - [Sources](#sources)
+
 ## Clear thinking and communicating
 
 > The Biggest Problem in Communication Is the Illusion That It Has Taken Place
@@ -20,7 +41,7 @@ In drawings we often use
 * line with `1` or `*` at either end
 * line with nothing at one end and `*` at the other
 
-I think should avoid these phrases and notations because they are ambigious. They are ambigious because:
+I think should avoid these phrases and notations because they are ambiguous. They are ambiguous because:
 
 1. they don't tell you what should happen in the "zero case" e.g. does _"A has one B"_ mean "A has exactly one B" or _"A usually has one B but might have none"_.
 1. Coming from a developer background, we are a bit primed to think of `*` as meaning _0 to many_ because that is how it reads in a regular expression but not everybody involved in data modelling is a developer. It seems common in data modelling for it to mean
@@ -32,7 +53,7 @@ However we aren't always working with a domain that we understand. If, for examp
 
 ### Confusion around what "relationship" actually means
 
-When we talk about "relationships" in data modelling, we usually refeerring to a pair of relationships
+When we talk about "relationships" in data modelling, we usually referring to a pair of relationships.
 
 Every relationship has an "inverse relationship" which goes in the opposite direction.
 This "relationship pair" is often called a _bidirectional relationship_. Don't let the singular fool you, a bidirectional relationship is actually two single direction relationships.
@@ -65,7 +86,7 @@ as
 
     TODO: research what UML says here and decide whether it's more useful than my informal stuff
 
-### How many possible kinds of relationship?
+## How many possible kinds of relationship?
 
 Consider a single directed relationship from entity A to entity B. There are 4 possible kinds of single direction relationship:
 
@@ -157,7 +178,7 @@ Things to watch out for:
 
 Annotated Code changes:
 
-* Rails layer (sugar and advisory constraints)
+* Rails layer (relationship and validation macros)
     * [app/models/alfa.rb](app/models/alfa.rb)
     * [app/models/bravo.rb](app/models/bravo.rb)
 * Database layer (enforcing constraints)
@@ -165,9 +186,9 @@ Annotated Code changes:
 
 Rate the outcome:
 
-| Q                                                              | A   |
-| -------------------------------------------------------------- | --- |
-| Can this relationship be broken by skipping Rails validations? | No  |
+| Q                                           | A                  |
+| ------------------------------------------- | ------------------ |
+| Relationship integrity enforced by Database | :white_check_mark: |
 
 
 ### 2. {1} to {0..1}
@@ -175,6 +196,7 @@ Rate the outcome:
 This is much easier and more effective to make the `belongs_to` side have
 exactly one `has_one` side. Doing it the other way around is possible but less
 effective (see below)
+
 #### Making the entity with belongs_to have exactly one of the has_one entity
 
 Summary of changes by layer:
@@ -219,10 +241,11 @@ class CreateRelationshipBetweenCaptainsAndStarship < ActiveRecord::Migration[6.0
 end
 ```
 
-Pros/cons
+Rate the outcome:
 
-* ++ Sugared by the Rails layers
-* ++ Enforced at the SQL layer
+| Q                                           | A                  |
+| ------------------------------------------- | ------------------ |
+| Relationship integrity enforced by Database | :white_check_mark: |
 
 #### Making the entity with has_one have exactly one of the belongs_to entity
 
@@ -270,10 +293,11 @@ class CreateRelationshipBetweenCaptainsAndStarship < ActiveRecord::Migration[6.0
 end
 ```
 
-Pros/cons
+Implementation score card:
 
-* ++ Implemented by the Rails layers (I think)
-*  to  Not enforced at the SQL layer at all.
+| Q                                           | A   |
+| ------------------------------------------- | --- |
+| Relationship integrity enforced by Database | :x: |
 
 ### 3. {1..N} to {0..1}
 
