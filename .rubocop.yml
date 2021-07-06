@@ -6,8 +6,8 @@ require:
 inherit_from:
   - https://bitbucket.org/rabidtech/rabid-dotfiles/raw/master/.rubocop.yml
 
-
 AllCops:
+  NewCops: enable
   DisplayCopNames: true
   DisplayStyleGuide: true
   TargetRubyVersion: 2.7
@@ -25,6 +25,9 @@ AllCops:
     - Gemfile
     - Guardfile
     - Rakefile
+
+Lint/EmptyBlock:
+  Enabled: false
 
 Metrics/AbcSize:
   Exclude:

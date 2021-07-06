@@ -185,85 +185,11 @@ Things to watch out for:
 #### Example code
 
 ```ruby
-# app/models/alfa.rb
-class Alfa < ApplicationRecord
-  belongs_to :bravo,
-             # Rails 5+ by default will validate that the target of a `belongs_to` exists
-             # i.e. Instances of `Alfa` will not be valid unless they have a connected
-             # `Bravo`.
-             #
-             # We want Alfas to have 0..1 Bravos so we must add `optional: true`
-             optional: true,
+INCLUDE_FILE app/models/alfa.rb
 
-             # Setting inverse_of is generally a good practice
-             inverse_of: :alfa,
+INCLUDE_FILE app/models/bravo.rb
 
-             # It isn't part of creating the relationship but it is good practice to
-             # always explicitly choose a value for `dependent` option. `nil` (do
-             # nothing) is the default. See
-             # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-             # for details.
-             dependent: nil
-end
-
-# app/models/bravo.rb
-class Bravo < ApplicationRecord
-  # Rails does not validate that the target of a `has_one` exists
-  has_one :alfa,
-          # Setting inverse_of is generally a good practice
-          inverse_of: :bravo,
-
-          # It isn't part of creating the relationship but it is good practice to
-          # always explicitly choose a value for `dependent` option. `nil` (do
-          # nothing) is the default. See
-          # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-          # for details.
-          dependent: nil
-end
-
-# db/migrate/20210704022223_connect_alfa_and_bravo.rb
-class ConnectAlfaAndBravo < ActiveRecord::Migration[6.1]
-  def change
-    # The code below does the following:
-    #
-    # * Create alfa.bravo_id with type `bigint` (the default type so we don't
-    #   have to specify it)
-    # * Allow alfas.bravo_id to be NULL (we need this because the relationship
-    #   is optional). This is the default but we do it explicitly here for
-    #   clarity.
-    # * Create a non-unique index on 'alfas.bravo_id' for performance reasons
-    # * Create a foreign key constraint on 'alfas.bravo_id' to reference 'bravos.id'.
-    add_belongs_to :alfas, :bravo, foreign_key: true, null: true
-
-    # Database **after** this migration has run:
-    #
-    #   relationship_examples_development=# \d alfas
-    #                                             Table "public.alfas"
-    #      Column   |              Type              | Collation | Nullable |              Default
-    #   ------------+--------------------------------+-----------+----------+-----------------------------------
-    #    id         | bigint                         |           | not null | nextval('alfas_id_seq'::regclass)
-    #    created_at | timestamp(6) without time zone |           | not null |
-    #    updated_at | timestamp(6) without time zone |           | not null |
-    #    bravo_id   | bigint                         |           |          |
-    #   Indexes:
-    #       "alfas_pkey" PRIMARY KEY, btree (id)
-    #       "index_alfas_on_bravo_id" btree (bravo_id)
-    #   Foreign-key constraints:
-    #       "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id)
-    #
-    #   relationship_examples_development=# \d bravos
-    #                                             Table "public.bravos"
-    #      Column   |              Type              | Collation | Nullable |              Default
-    #   ------------+--------------------------------+-----------+----------+------------------------------------
-    #    id         | bigint                         |           | not null | nextval('bravos_id_seq'::regclass)
-    #    created_at | timestamp(6) without time zone |           | not null |
-    #    updated_at | timestamp(6) without time zone |           | not null |
-    #   Indexes:
-    #       "bravos_pkey" PRIMARY KEY, btree (id)
-    #   Referenced by:
-    #       TABLE "alfas" CONSTRAINT "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id)
-  end
-end
+INCLUDE_FILE db/migrate/20210704022223_connect_alfa_and_bravo.rb
 ```
 
 #### Implementation score card:
@@ -299,83 +225,11 @@ Another way of thinking about this is that `belongs_to` can create a `{1}` backe
 #### Example code
 
 ```ruby
-# app/models/charlie.rb
-class Charlie < ApplicationRecord
-  belongs_to :deltum,
-             # Rails 5+ by default will validate that the target of a `belongs_to` exists
-             # i.e. Instances of `Charlie` will not be valid unless they have a connected
-             # `Deltum`.
-             # optional: false, # false is the default
+INCLUDE_FILE app/models/charlie.rb
 
-             # Setting inverse_of is generally a good practice
-             inverse_of: :charlie,
+INCLUDE_FILE app/models/deltum.rb
 
-             # It isn't part of creating the relationship but it is good practice to
-             # always explicitly choose a value for `dependent` option. `nil` (do
-             # nothing) is the default. See
-             # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-             # for details.
-             dependent: nil
-end
-
-# app/models/deltum.rb
-class Deltum < ApplicationRecord
-  # Rails does not validate that the target of a `has_one` exists so `has_one`
-  # naturally creates a `{0..1}` relationship
-  has_one :charlie,
-          # Setting inverse_of is generally a good practice
-          inverse_of: :deltum,
-
-          # It isn't part of creating the relationship but it is good practice to
-          # always explicitly choose a value for `dependent` option. `nil` (do
-          # nothing) is the default. See
-          # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-          # for details.
-          dependent: nil
-end
-
-# db/migrate/20210705071426_connect_charlie_and_deltum.rb
-class ConnectCharlieAndDeltum < ActiveRecord::Migration[6.1]
-  def change
-    # The code below does the following:
-    #
-    # * Create charlie.deltum_id with type `bigint` (the default type so we don't
-    #   have to specify it)
-    # * Prevent charlies.deltum_id from being NULL. This is what enforces the
-    #   "exactly 1" nature of the relationship.
-    # * Create a non-unique index on 'charlies.deltum_id' for performance reasons
-    # * Create a foreign key constraint on 'charlies.deltum_id' to reference 'deltums.id'.
-    add_belongs_to :charlies, :deltum, foreign_key: true, null: false
-
-    # Database **after** this migration has run:
-    #
-    # relationship_examples_development=# \d delta
-    #     Table "public.delta"
-    # Column   |              Type              | Collation | Nullable |              Default
-    # ------------+--------------------------------+-----------+----------+-----------------------------------
-    # id         | bigint                         |           | not null | nextval('delta_id_seq'::regclass)
-    # created_at | timestamp(6) without time zone |           | not null |
-    # updated_at | timestamp(6) without time zone |           | not null |
-    # Indexes:
-    # "delta_pkey" PRIMARY KEY, btree (id)
-    # Referenced by:
-    # TABLE "charlies" CONSTRAINT "fk_rails_2763c9d366" FOREIGN KEY (deltum_id) REFERENCES delta(id)
-
-    # relationship_examples_development=# \d charlies
-    #                                           Table "public.charlies"
-    #    Column   |              Type              | Collation | Nullable |               Default
-    # ------------+--------------------------------+-----------+----------+--------------------------------------
-    #  id         | bigint                         |           | not null | nextval('charlies_id_seq'::regclass)
-    #  created_at | timestamp(6) without time zone |           | not null |
-    #  updated_at | timestamp(6) without time zone |           | not null |
-    #  deltum_id  | bigint                         |           | not null |
-    # Indexes:
-    #     "charlies_pkey" PRIMARY KEY, btree (id)
-    #     "index_charlies_on_deltum_id" btree (deltum_id)
-    # Foreign-key constraints:
-    #     "fk_rails_2763c9d366" FOREIGN KEY (deltum_id) REFERENCES delta(id)
-  end
-end
+INCLUDE_FILE db/migrate/20210705071426_connect_charlie_and_deltum.rb
 ```
 
 #### Implementation score card:
@@ -398,87 +252,11 @@ Things to watch out for:
 #### Example code
 
 ```ruby
-# app/models/golf.rb
-class Golf < ApplicationRecord
-  belongs_to :hotel,
-             # Rails 5+ by default will validate that the target of a `belongs_to` exists
-             # i.e. Instances of `Golf` will not be valid unless they have a connected
-             # `Hotel`.
-             #
-             # We want Golves to have 0..1 Hotels so we must add `optional: true`
-             optional: true,
+INCLUDE_FILE app/models/golf.rb
 
-             # Setting inverse_of is generally a good practice
-             inverse_of: :golves,
+INCLUDE_FILE app/models/hotel.rb
 
-             # It isn't part of creating the relationship but it is good practice to
-             # always explicitly choose a value for `dependent` option. `nil` (do
-             # nothing) is the default. See
-             # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-             # for details.
-             dependent: nil
-end
-
-# app/models/hotel.rb
-class Hotel < ApplicationRecord
-  has_many :golves,
-           # Setting inverse_of is generally a good practice
-           inverse_of: :hotel,
-
-           # It isn't part of creating the relationship but it is good practice to
-           # always explicitly choose a value for `dependent` option. `nil` (do
-           # nothing) is the default. See
-           # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-           # for details.
-           dependent: nil
-
-  # Use a validation to try to "enforce" that a Hotel always has {1..N} Golves
-  # i.e. **at least** 1 Golf. This isn't really enforcing because there is a
-  # bunch of Rails API for doing things skipping validations.
-  validates :captains, presence: true
-end
-
-# db/migrate/20210705184309_connect_golf_to_hotel.rb
-class ConnectGolfToHotel < ActiveRecord::Migration[6.1]
-  def change
-    # The code below does the following:
-    #
-    # * Create golfs.hotel_id with type `bigint` (the default type so we don't
-    #   have to specify it)
-    # * Allow 'golfs.hotel_id' to be NULL. This is what creates the `0..` bit of the relationship
-    # * Create a non-unique index on 'golfs.hotel_id' for performance reasons
-    # * Create a foreign key constraint on 'golfs.hotel_id' to reference 'hotels.id'.
-    add_belongs_to :golves, :hotel, foreign_key: true, null: true
-
-    # Database **after** this migration has run:
-    #
-    # relationship_examples_development=# \d golves
-    #     Table "public.golves"
-    # Column   |              Type              | Collation | Nullable |              Default
-    # ------------+--------------------------------+-----------+----------+------------------------------------
-    # id         | bigint                         |           | not null | nextval('golves_id_seq'::regclass)
-    # created_at | timestamp(6) without time zone |           | not null |
-    # updated_at | timestamp(6) without time zone |           | not null |
-    # hotel_id   | bigint                         |           |          |
-    # Indexes:
-    # "golves_pkey" PRIMARY KEY, btree (id)
-    # "index_golves_on_hotel_id" btree (hotel_id)
-    # Foreign-key constraints:
-    # "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id)
-
-    # relationship_examples_development=# \d hotels
-    #     Table "public.hotels"
-    # Column   |              Type              | Collation | Nullable |              Default
-    # ------------+--------------------------------+-----------+----------+------------------------------------
-    # id         | bigint                         |           | not null | nextval('hotels_id_seq'::regclass)
-    # created_at | timestamp(6) without time zone |           | not null |
-    # updated_at | timestamp(6) without time zone |           | not null |
-    # Indexes:
-    # "hotels_pkey" PRIMARY KEY, btree (id)
-    # Referenced by:
-    # TABLE "golves" CONSTRAINT "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id)
-  end
-end
+INCLUDE_FILE db/migrate/20210705184309_connect_golf_to_hotel.rb
 ```
 
 #### Implementation score card:
