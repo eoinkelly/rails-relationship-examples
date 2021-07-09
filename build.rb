@@ -5,6 +5,7 @@ BACKUP_PATH = File.join(__dir__, "README.md.gitignored.backup")
 OUTPUT_PATH = File.join(__dir__, "README.md")
 
 def do_build # rubocop:disable Metrics/MethodLength
+  puts "[Building]"
   output = ""
 
   File.read(INPUT_PATH).each_line do |line|
@@ -20,15 +21,18 @@ def do_build # rubocop:disable Metrics/MethodLength
 
   FileUtils.cp(OUTPUT_PATH, BACKUP_PATH)
   File.write(OUTPUT_PATH, output)
+rescue StandardError => e
+  warn "Rescued build error: #{e.inspect}"
 end
 
 def main
+  do_build
+
   puts "Watching for changes in #{INPUT_PATH}"
-  old_mtime = Time.now - 10 # rubocop:disable Rails/TimeZone
+  old_mtime = File.mtime(INPUT_PATH)
 
   loop do
     if File.mtime(INPUT_PATH) > old_mtime
-      puts "[Building]"
       do_build
       old_mtime = File.mtime(INPUT_PATH)
     else

@@ -14,6 +14,7 @@ gem "webpacker", "~> 5.0"
 gem "lograge"
 gem "okcomputer"
 gem "sentry-raven"
+gem "rubyzip", "2.3.0" # lock to silence warning
 
 gem "rack-canonical-host", "~> 0.2.3"
 
