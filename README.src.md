@@ -1,6 +1,37 @@
 # Modelling relationships between database entities
 
-**This is all still WIP**
+
+```
+QUESTION: in what cases do you need to specify inverse_of in rails association? in what instances is it a good idea?
+
+> Automatic inverse detection only works on has_many, has_one, and belongs_to associations.
+> :foreign_key and :through options on the associations, or a custom scope, will also prevent the association's inverse from being found automatically.
+> The automatic guessing of the inverse association uses a heuristic based on the name of the class, so it may not work for all associations, especially the ones with non-standard names.
+> You can turn off the automatic detection of inverse associations by setting the :inverse_of option to false
+
+https://rails.rubystyle.guide/#has_many-has_one-dependent-option
+contraticts the advice in gitlab style guide
+
+This is all still WIP
+
+TODO List
+
+* Demo polymporhic assoications. They aren't a new kind but they are diff in Rails e.g. prob need a dependent: option
+* explain avoiding dependent: options by default thoughtout
+
+=========================
+    the db can do deletions or rails can
+    every foreign key should define an ON DELETE clause
+    When adding a foreign key in PostgreSQL the column is not indexed automatically, thus you must also add a concurrent index. Not doing so will result in cascading deletes being very slow.
+
+> Don’t define options such as dependent: :destroy or dependent: :delete when defining an association. Defining these options means Rails will handle the removal of data, instead of letting the database handle this in the most efficient way possible
+
+The dependent option implements itself with callbacks I presume
+I think it might still be required for polymorphic associations
+=========================
+
+
+```
 
 This repo is my attempt to clarify some best practices for myself around:
 
@@ -12,10 +43,13 @@ This repo is my attempt to clarify some best practices for myself around:
     - [Confusion around what "relationship" actually means](#confusion-around-what-relationship-actually-means)
   - [How many possible kinds of relationship?](#how-many-possible-kinds-of-relationship)
   - [Modelling the 10 kinds of relationship in Rails](#modelling-the-10-kinds-of-relationship-in-rails)
+      - [Explicit inverse_of](#explicit-inverse_of)
+      - [Important points to take away (common to all the implementations below):](#important-points-to-take-away-common-to-all-the-implementations-below)
     - [1. {0..1} to {0..1}](#1-01-to-01)
       - [Example code](#example-code)
       - [Implementation score card:](#implementation-score-card)
-    - [2. {1} to {0..1}](#2-1-to-01)
+    - [2. {0..1} to {1}](#2-01-to-1)
+      - [Deletions](#deletions)
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
@@ -44,6 +78,8 @@ In drawings we often use
 * An warrow with filled in head to indicate "many"
 * line with `1` or `*` at either end
 * line with nothing at one end and `*` at the other
+
+Rails vocabulary for expressing relationships includes phrases like `has_one`, `has_many` etc.
 
 I think should avoid these phrases and notations because they are ambiguous. They are ambiguous because:
 
@@ -142,20 +178,15 @@ Next we should look at how to implement these in Rails.
 ## Modelling the 10 kinds of relationship in Rails
 
 1.  `{0..1} to {0..1}`
-    * default for `has_one`, `belongs_to` combination
-2.  `{1} to {0..1}`
+2.  `{1}    to {0..1}`
 3.  `{1..N} to {0..1}`
 4.  `{0..N} to {0..1}`
-       * default for `has_many`, `belongs_to` combination
-5.  `{1} to {1}`
+5.  `{1}    to {1}`
 6.  `{1..N} to {1}`
 7.  `{0..N} to {1}`
 8.  `{1..N} to {1..N}`
 9.  `{0..N} to {1..N}`
 10. `{0..N} to {0..N}`
-    * default for `has_and_belongs_to_many` or `has_many(through:...)` pair
-
-Notice that the relationships Rails creates include the zero case by default i.e. you have to do a bit extra to prevent a relationship from being empty.
 
 Rails implements relationships with a mixture of the following tools:
 
@@ -163,33 +194,96 @@ Rails implements relationships with a mixture of the following tools:
 1. Model validations
 1. Database constraints created in migrations
 
-We should think of rails validations as "advisory" rather than "enforcing" because they can be skipped.
+We consider Rails validations as "advisory" rather than "enforcing" because they can be skipped e.g. `my_model.save(validate: false)`.  Therefore the best outcome for implementing a relationship will use **both** Rails validations (whether explicitly added by `validates` or implicitly added by the relationship macros) **and** Database constraints.
 
-Therefore the best outcome for implementing a relationship will use **both** Rails validations **and** Database constraints. This isn't always feasible to achieve, usually for performance reasons or because the implementation would be very fiddly.
+It isn't always possible to achieve this outcome. And sometimes, while the outcome is possible, there are trade-offs which make us choose not to.
+
+    TODO: back ^^^ up with some data
+
+Your decision tree when implementing a relationship in Rails should be:
+
+1. Choose the most appropriate one of the 10 bidirectional relationships
+2. Decide on deletion behaviour
+    * This is nto always required ?
+    * TODO: list which ones it is required
+
+
+    IDEA: a decision tree diagram
+
+    IDEA: a table summarising all 10 relationships with the following cols
+      relationship-name
+      LHS rails macro
+      RHS rails macro
+      database migration details
+      deletion behaviour options
+      ??? others
+
+#### Explicit inverse_of
+
+Rails will attempt to automatically guess the inverse relationship in many cases. This automatic detection fails if
+
+* You use a `foreign_key: ` option on the association
+* You add a custom scope to the association
+* You use the `through:` option on the association
+* The class names do not line up such that Rails can guess the class name
+
+Because of the large number of cases where automatic inverse guessing does not work, we think it is easier to always add an explicit `inverse_of` so that you don't have to remember those edge cases. All the examples below specify an explicit `:inverse_of` option.
+
+However a team may choose to rely on Rails' automatic `inverse_of` guessing without harming the quality of the implementation, provided the whole team understands the exceptions above and adds explicit `inverse_of` options where required.
+
+#### Important points to take away (common to all the implementations below):
+
+* Rails does not create foreign key constraints by default in migrations.
+    * These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option whenever possible.
+* Always add an index to the foreign key column
+    * because it makes cascading deletes acceptably fast (Not 100% on this one yet)
+    * TODO: does rails create it implicitly???
+    * Do we care about the index if we don't have cascading deletes???
+* Rails use of synthetic id columns for primary keys is a good thing and avoids a lot of problems
+    * It avoids potentially expensive `ON UPDATE` options in our foreign key constraints.
+* Some relationships have more than one possible deletion behaviour.
 
 ### 1. {0..1} to {0..1}
 
-    [Alfa]{0..1} ---- {0..1}[Bravo]
+Consider the following relationship:
+
+    Alfa {0..1} to {0..1} Bravo
+
+which reads as:
+
+    Alfa has 0..1 Bravo
+    Bravo has 0..1 Alfa
 
 Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
-It doesn't really matter where we put the `belongs_to` to implement this relationship (it will matter for some of the other relationships) .
-
-In our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`
+It does not matter in which model we put the `belongs_to` (it does matter for some relationships) so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
 
 Things to watch out for:
 
 * Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option in the migration.
-* Rails will validate a `belongs_to` relationship by default but not a `has_one` so we need `belongs_to(..., optional: true)`
+* Rails will validate a `belongs_to` relationship by default so we need to add the `optional: true` option to make the relationship a `0..1`
+* Rails will not validate a `has_one` relationship by default.
+
+Deletion behaviour
+
+* Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship.
 
 #### Example code
 
 ```ruby
 INCLUDE_FILE app/models/alfa.rb
+```
 
+```ruby
 INCLUDE_FILE app/models/bravo.rb
+```
 
+```ruby
 INCLUDE_FILE db/migrate/20210704022223_connect_alfa_and_bravo.rb
+```
+
+```ruby
+INCLUDE_FILE spec/models/alfa_bravo_relationship_spec.rb
 ```
 
 #### Implementation score card:
@@ -199,16 +293,16 @@ INCLUDE_FILE db/migrate/20210704022223_connect_alfa_and_bravo.rb
 | Relationship integrity enforced by Database | :white_check_mark: |
 | Recommended                                 | :white_check_mark: |
 
-### 2. {1} to {0..1}
+### 2. {0..1} to {1}
 
-Consider the following relationship
+Consider the following relationship:
 
-    [A]{1} to {0..1}[B]
+    Charlie {0..1} to {1} Deltum
 
-which reads as
+which reads as:
 
-    A has 0..1 B
-    B has exactly 1 A
+    Charlie has exactly 1 Deltum
+    Deltum has 0..1 Charlie
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros. Does it matter which model we put the `belongs_to` in? Yes.
 
@@ -222,14 +316,41 @@ The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at 
 
 Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
 
+#### Deletions
+
+The bidirectional relationship
+
+    Charlie {0..1} to {1} Deltum
+
+does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
+
+For example, when you attempt to delete a Deltum which has an associated Charlie, then that Charlie will be in an forbidden state i.e. the Charlie will exist without a Deltum.
+
+There are 2 options:
+
+1. Fail the attempt to delete the Deltum with an error.
+    * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
+    * This is the default behaviour when the `on_delete` option is not specified in the migration
+    * This is also the option we use in the code example below.
+2. Automatically Delete the associated Charlie when the Deltum is deleted
+    * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails. See the comments in the migration file below for details on how to enable this automatic deletion.
+
 #### Example code
 
 ```ruby
 INCLUDE_FILE app/models/charlie.rb
+```
 
+```ruby
 INCLUDE_FILE app/models/deltum.rb
+```
 
+```ruby
 INCLUDE_FILE db/migrate/20210705071426_connect_charlie_and_deltum.rb
+```
+
+```ruby
+INCLUDE_FILE spec/models/charlie_deltum_relationship_spec.rb
 ```
 
 #### Implementation score card:
@@ -249,13 +370,21 @@ Things to watch out for:
 * You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
 * Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
 
+Deletion behaviour
+
+    TODO
+
 #### Example code
 
 ```ruby
 INCLUDE_FILE app/models/golf.rb
+```
 
+```ruby
 INCLUDE_FILE app/models/hotel.rb
+```
 
+```ruby
 INCLUDE_FILE db/migrate/20210705184309_connect_golf_to_hotel.rb
 ```
 
@@ -470,3 +599,5 @@ Pros/cons
 ## Sources
 
 * "All for One, One for all" paper by C.J. Date http://www.dcs.warwick.ac.uk/~hugh/TTM/AllforOne.pdf
+* https://docs.gitlab.com/ee/development/foreign_keys.html
+* TODO: rails guides

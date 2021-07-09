@@ -63,7 +63,7 @@ ActiveRecord::Schema.define(version: 2021_07_05_184309) do
     t.datetime "updated_at", precision: 6, null: false
   end
 
-  add_foreign_key "alfas", "bravos"
+  add_foreign_key "alfas", "bravos", on_delete: :nullify
   add_foreign_key "charlies", "delta"
   add_foreign_key "echos", "foxtrots"
   add_foreign_key "golves", "hotels"

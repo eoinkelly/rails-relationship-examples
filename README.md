@@ -1,6 +1,35 @@
 # Modelling relationships between database entities
 
-**This is all still WIP**
+
+```
+QUESTION: in what cases do you need to specify inverse_of in rails association? in what instances is it a good idea?
+
+> Automatic inverse detection only works on has_many, has_one, and belongs_to associations.
+> :foreign_key and :through options on the associations, or a custom scope, will also prevent the association's inverse from being found automatically.
+> The automatic guessing of the inverse association uses a heuristic based on the name of the class, so it may not work for all associations, especially the ones with non-standard names.
+> You can turn off the automatic detection of inverse associations by setting the :inverse_of option to false
+
+
+This is all still WIP
+
+TODO List
+
+* Demo polymporhic assoications. They aren't a new kind but they are diff in Rails e.g. prob need a dependent: option
+* explain avoiding dependent: options by default thoughtout
+
+=========================
+    the db can do deletions or rails can
+    every foreign key should define an ON DELETE clause
+    When adding a foreign key in PostgreSQL the column is not indexed automatically, thus you must also add a concurrent index. Not doing so will result in cascading deletes being very slow.
+
+> Don’t define options such as dependent: :destroy or dependent: :delete when defining an association. Defining these options means Rails will handle the removal of data, instead of letting the database handle this in the most efficient way possible
+
+The dependent option implements itself with callbacks I presume
+I think it might still be required for polymorphic associations
+=========================
+
+
+```
 
 This repo is my attempt to clarify some best practices for myself around:
 
@@ -12,10 +41,13 @@ This repo is my attempt to clarify some best practices for myself around:
     - [Confusion around what "relationship" actually means](#confusion-around-what-relationship-actually-means)
   - [How many possible kinds of relationship?](#how-many-possible-kinds-of-relationship)
   - [Modelling the 10 kinds of relationship in Rails](#modelling-the-10-kinds-of-relationship-in-rails)
+      - [Explicit inverse_of](#explicit-inverse_of)
+      - [Important points to take away (common to all the implementations below):](#important-points-to-take-away-common-to-all-the-implementations-below)
     - [1. {0..1} to {0..1}](#1-01-to-01)
       - [Example code](#example-code)
       - [Implementation score card:](#implementation-score-card)
-    - [2. {1} to {0..1}](#2-1-to-01)
+    - [2. {0..1} to {1}](#2-01-to-1)
+      - [Deletions](#deletions)
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
@@ -44,6 +76,8 @@ In drawings we often use
 * An warrow with filled in head to indicate "many"
 * line with `1` or `*` at either end
 * line with nothing at one end and `*` at the other
+
+Rails vocabulary for expressing relationships includes phrases like `has_one`, `has_many` etc.
 
 I think should avoid these phrases and notations because they are ambiguous. They are ambiguous because:
 
@@ -142,20 +176,15 @@ Next we should look at how to implement these in Rails.
 ## Modelling the 10 kinds of relationship in Rails
 
 1.  `{0..1} to {0..1}`
-    * default for `has_one`, `belongs_to` combination
-2.  `{1} to {0..1}`
+2.  `{1}    to {0..1}`
 3.  `{1..N} to {0..1}`
 4.  `{0..N} to {0..1}`
-       * default for `has_many`, `belongs_to` combination
-5.  `{1} to {1}`
+5.  `{1}    to {1}`
 6.  `{1..N} to {1}`
 7.  `{0..N} to {1}`
 8.  `{1..N} to {1..N}`
 9.  `{0..N} to {1..N}`
 10. `{0..N} to {0..N}`
-    * default for `has_and_belongs_to_many` or `has_many(through:...)` pair
-
-Notice that the relationships Rails creates include the zero case by default i.e. you have to do a bit extra to prevent a relationship from being empty.
 
 Rails implements relationships with a mixture of the following tools:
 
@@ -163,64 +192,110 @@ Rails implements relationships with a mixture of the following tools:
 1. Model validations
 1. Database constraints created in migrations
 
-We should think of rails validations as "advisory" rather than "enforcing" because they can be skipped.
+We consider Rails validations as "advisory" rather than "enforcing" because they can be skipped e.g. `my_model.save(validate: false)`.  Therefore the best outcome for implementing a relationship will use **both** Rails validations (whether explicitly added by `validates` or implicitly added by the relationship macros) **and** Database constraints.
 
-Therefore the best outcome for implementing a relationship will use **both** Rails validations **and** Database constraints. This isn't always feasible to achieve, usually for performance reasons or because the implementation would be very fiddly.
+It isn't always possible to achieve this outcome. And sometimes, while the outcome is possible, there are trade-offs which make us choose not to.
+
+    TODO: back ^^^ up with some data
+
+Your decision tree when implementing a relationship in Rails should be:
+
+1. Choose the most appropriate one of the 10 bidirectional relationships
+2. Decide on deletion behaviour
+    * This is nto always required ?
+    * TODO: list which ones it is required
+
+
+    IDEA: a decision tree diagram
+
+    IDEA: a table summarising all 10 relationships with the following cols
+      relationship-name
+      LHS rails macro
+      RHS rails macro
+      database migration details
+      deletion behaviour options
+      ??? others
+
+#### Explicit inverse_of
+
+Rails will attempt to automatically guess the inverse relationship in many cases. This automatic detection fails if
+
+* You use a `foreign_key: ` option on the association
+* You add a custom scope to the association
+* You use the `through:` option on the association
+* The class names do not line up such that Rails can guess the class name
+
+Because of the large number of cases where automatic inverse guessing does not work, we think it is easier to always add an explicit `inverse_of` so that you don't have to remember those edge cases. All the examples below specify an explicit `:inverse_of` option.
+
+However a team may choose to rely on Rails' automatic `inverse_of` guessing without harming the quality of the implementation, provided the whole team understands the exceptions above and adds explicit `inverse_of` options where required.
+
+#### Important points to take away (common to all the implementations below):
+
+* Rails does not create foreign key constraints by default in migrations.
+    * These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option whenever possible.
+* Always add an index to the foreign key column
+    * because it makes cascading deletes acceptably fast (Not 100% on this one yet)
+    * TODO: does rails create it implicitly???
+    * Do we care about the index if we don't have cascading deletes???
+* Rails use of synthetic id columns for primary keys is a good thing and avoids a lot of problems
+    * It avoids potentially expensive `ON UPDATE` options in our foreign key constraints.
+* Some relationships have more than one possible deletion behaviour.
 
 ### 1. {0..1} to {0..1}
 
-    [Alfa]{0..1} ---- {0..1}[Bravo]
+Consider the following relationship:
+
+    Alfa {0..1} to {0..1} Bravo
+
+which reads as:
+
+    Alfa has 0..1 Bravo
+    Bravo has 0..1 Alfa
 
 Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
-It doesn't really matter where we put the `belongs_to` to implement this relationship (it will matter for some of the other relationships) .
-
-In our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`
+It does not matter in which model we put the `belongs_to` (it does matter for some relationships) so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
 
 Things to watch out for:
 
 * Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option in the migration.
-* Rails will validate a `belongs_to` relationship by default but not a `has_one` so we need `belongs_to(..., optional: true)`
+* Rails will validate a `belongs_to` relationship by default so we need to add the `optional: true` option to make the relationship a `0..1`
+* Rails will not validate a `has_one` relationship by default.
+
+Deletion behaviour
+
+* Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship.
 
 #### Example code
 
 ```ruby
 # app/models/alfa.rb
 class Alfa < ApplicationRecord
-  belongs_to :bravo,
-             # Rails 5+ by default will validate that the target of a `belongs_to` exists
-             # i.e. Instances of `Alfa` will not be valid unless they have a connected
-             # `Bravo`.
-             #
-             # We want Alfas to have 0..1 Bravos so we must add `optional: true`
-             optional: true,
-
-             # Setting inverse_of is generally a good practice
-             inverse_of: :alfa,
-
-             # It isn't part of creating the relationship but it is good practice to
-             # always explicitly choose a value for `dependent` option. `nil` (do
-             # nothing) is the default. See
-             # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-             # for details.
-             dependent: nil
+  # optional: true
+  #   Rails 5+ by default will validate that the target of a `belongs_to` exists
+  #   i.e. Instances of `Alfa` will not be valid unless they have a connected
+  #   `Bravo`. We want Alfas to have 0..1 Bravos so we must add `optional: true`.
+  # inverse_of:
+  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   remember the various edge cases where it is required and/or recommended.
+  belongs_to :bravo, optional: true, inverse_of: :alfa
 end
+```
 
+```ruby
 # app/models/bravo.rb
 class Bravo < ApplicationRecord
-  # Rails does not validate that the target of a `has_one` exists
-  has_one :alfa,
-          # Setting inverse_of is generally a good practice
-          inverse_of: :bravo,
-
-          # It isn't part of creating the relationship but it is good practice to
-          # always explicitly choose a value for `dependent` option. `nil` (do
-          # nothing) is the default. See
-          # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-          # for details.
-          dependent: nil
+  # Rails does not validate that the target of a `has_one` exists so it
+  # naturally creats a 0..1 relationship.
+  #
+  # inverse_of:
+  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   remember the various edge cases where it is required and/or recommended.
+  has_one :alfa, inverse_of: :bravo
 end
+```
 
+```ruby
 # db/migrate/20210704022223_connect_alfa_and_bravo.rb
 class ConnectAlfaAndBravo < ActiveRecord::Migration[6.1]
   def change
@@ -232,36 +307,118 @@ class ConnectAlfaAndBravo < ActiveRecord::Migration[6.1]
     #   is optional). This is the default but we do it explicitly here for
     #   clarity.
     # * Create a non-unique index on 'alfas.bravo_id' for performance reasons
-    # * Create a foreign key constraint on 'alfas.bravo_id' to reference 'bravos.id'.
-    add_belongs_to :alfas, :bravo, foreign_key: true, null: true
+    # * Create a foreign key constraint on 'alfas.bravo_id' to reference
+    #  'bravos.id'. Configure the foreign key constraint so that if a row from
+    #  'bravos' is deleted, then any rows in `alfas` which reference that row
+    #  will have their `alfas.bravo_id` set to `null`
+    add_belongs_to :alfas, :bravo, foreign_key: { on_delete: :nullify }, null: true
 
     # Database **after** this migration has run:
     #
-    #   relationship_examples_development=# \d alfas
-    #                                             Table "public.alfas"
-    #      Column   |              Type              | Collation | Nullable |              Default
-    #   ------------+--------------------------------+-----------+----------+-----------------------------------
-    #    id         | bigint                         |           | not null | nextval('alfas_id_seq'::regclass)
-    #    created_at | timestamp(6) without time zone |           | not null |
-    #    updated_at | timestamp(6) without time zone |           | not null |
-    #    bravo_id   | bigint                         |           |          |
-    #   Indexes:
-    #       "alfas_pkey" PRIMARY KEY, btree (id)
-    #       "index_alfas_on_bravo_id" btree (bravo_id)
-    #   Foreign-key constraints:
-    #       "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id)
-    #
-    #   relationship_examples_development=# \d bravos
-    #                                             Table "public.bravos"
-    #      Column   |              Type              | Collation | Nullable |              Default
-    #   ------------+--------------------------------+-----------+----------+------------------------------------
-    #    id         | bigint                         |           | not null | nextval('bravos_id_seq'::regclass)
-    #    created_at | timestamp(6) without time zone |           | not null |
-    #    updated_at | timestamp(6) without time zone |           | not null |
-    #   Indexes:
-    #       "bravos_pkey" PRIMARY KEY, btree (id)
-    #   Referenced by:
-    #       TABLE "alfas" CONSTRAINT "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id)
+    # relationship_examples_development=# \d alfas
+    #     Table "public.alfas"
+    # Column   |              Type              | Collation | Nullable |              Default
+    # ------------+--------------------------------+-----------+----------+-----------------------------------
+    # id         | bigint                         |           | not null | nextval('alfas_id_seq'::regclass)
+    # created_at | timestamp(6) without time zone |           | not null |
+    # updated_at | timestamp(6) without time zone |           | not null |
+    # bravo_id   | bigint                         |           |          |
+    # Indexes:
+    # "alfas_pkey" PRIMARY KEY, btree (id)
+    # "index_alfas_on_bravo_id" btree (bravo_id)
+    # Foreign-key constraints:
+    # "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id) ON DELETE SET NULL
+
+    # relationship_examples_development=# \d bravos
+    #     Table "public.bravos"
+    # Column   |              Type              | Collation | Nullable |              Default
+    # ------------+--------------------------------+-----------+----------+------------------------------------
+    # id         | bigint                         |           | not null | nextval('bravos_id_seq'::regclass)
+    # created_at | timestamp(6) without time zone |           | not null |
+    # updated_at | timestamp(6) without time zone |           | not null |
+    # Indexes:
+    # "bravos_pkey" PRIMARY KEY, btree (id)
+    # Referenced by:
+    # TABLE "alfas" CONSTRAINT "fk_rails_695e7121a5" FOREIGN KEY (bravo_id) REFERENCES bravos(id) ON DELETE SET NULL
+  end
+end
+```
+
+```ruby
+# spec/models/alfa_bravo_relationship_spec.rb
+require "rails_helper"
+
+##
+# These specs exist to help explain the relationship. You shouldn't copy these
+# directly into your app without considering whether they provide long-term
+# value to you.
+#
+RSpec.describe "Alfa {0..1} <--> {0..1} Bravo", type: :model do
+  describe "Alfa has {0..1} Bravo" do
+    it "Alfa is valid with 0 Bravo" do
+      alfa = Alfa.new
+
+      expect(alfa.bravo).to eq(nil)
+      expect(alfa.valid?).to eq(true)
+
+      alfa.save!
+      expect(alfa.persisted?).to eq(true)
+    end
+
+    it "Alfa is valid with 1 Bravo" do
+      bravo = Bravo.new
+      alfa = Alfa.new(bravo: bravo)
+
+      expect(alfa.valid?).to eq(true)
+      expect(alfa.bravo).to eq(bravo)
+
+      alfa.save!
+      expect(alfa.persisted?).to eq(true)
+    end
+  end
+
+  describe "Bravo has {0..1} Alfa" do
+    it "Bravo is valid with 0 Alfa" do
+      bravo = Bravo.new
+
+      expect(bravo.alfa).to eq(nil)
+      expect(bravo.valid?).to eq(true)
+
+      bravo.save!
+      expect(bravo.persisted?).to eq(true)
+    end
+
+    it "Bravo is valid with 1 Alfa" do
+      alfa = Alfa.new
+      bravo = Bravo.new(alfa: alfa)
+
+      expect(bravo.valid?).to eq(true)
+      expect(bravo.alfa).to eq(alfa)
+
+      bravo.save!
+      expect(bravo.persisted?).to eq(true)
+    end
+  end
+
+  describe "deletions" do
+    it "When the Alfa is deleted, Bravo is not changed" do
+      bravo = Bravo.create!
+      alfa = Alfa.create!(bravo: bravo)
+
+      alfa.destroy
+
+      expect(Bravo.count).to eq(1)
+    end
+
+    it "When the Bravo is deleted, Alfa's foreign key col is nullified by the DB foreign key constraint" do
+      bravo = Bravo.create!
+      alfa = Alfa.create!(bravo: bravo)
+
+      bravo.destroy
+
+      expect(Alfa.count).to eq(1)
+      expect(Alfa.first.bravo_id).to eq(nil)
+    end
   end
 end
 ```
@@ -273,16 +430,16 @@ end
 | Relationship integrity enforced by Database | :white_check_mark: |
 | Recommended                                 | :white_check_mark: |
 
-### 2. {1} to {0..1}
+### 2. {0..1} to {1}
 
-Consider the following relationship
+Consider the following relationship:
 
-    [A]{1} to {0..1}[B]
+    Charlie {0..1} to {1} Deltum
 
-which reads as
+which reads as:
 
-    A has 0..1 B
-    B has exactly 1 A
+    Charlie has exactly 1 Deltum
+    Deltum has 0..1 Charlie
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros. Does it matter which model we put the `belongs_to` in? Yes.
 
@@ -296,44 +453,55 @@ The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at 
 
 Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
 
+#### Deletions
+
+The bidirectional relationship
+
+    Charlie {0..1} to {1} Deltum
+
+does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
+
+For example, when you attempt to delete a Deltum which has an associated Charlie, then that Charlie will be in an forbidden state i.e. the Charlie will exist without a Deltum.
+
+There are 2 options:
+
+1. Fail the attempt to delete the Deltum with an error.
+    * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
+    * This is the default behaviour when the `on_delete` option is not specified in the migration
+    * This is also the option we use in the code example below.
+2. Automatically Delete the associated Charlie when the Deltum is deleted
+    * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails. See the comments in the migration file below for details on how to enable this automatic deletion.
+
 #### Example code
 
 ```ruby
 # app/models/charlie.rb
 class Charlie < ApplicationRecord
-  belongs_to :deltum,
-             # Rails 5+ by default will validate that the target of a `belongs_to` exists
-             # i.e. Instances of `Charlie` will not be valid unless they have a connected
-             # `Deltum`.
-             # optional: false, # false is the default
-
-             # Setting inverse_of is generally a good practice
-             inverse_of: :charlie,
-
-             # It isn't part of creating the relationship but it is good practice to
-             # always explicitly choose a value for `dependent` option. `nil` (do
-             # nothing) is the default. See
-             # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-             # for details.
-             dependent: nil
+  # Rails 5+ by default will validate that the target of a `belongs_to` exists
+  # i.e. Instances of `Alfa` will not be valid unless they have a connected
+  # `Bravo`. This naturally creates a {1} relationship.
+  #
+  # inverse_of:
+  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   remember the various edge cases where it is required and/or recommended.
+  belongs_to :deltum, inverse_of: :charlie,
 end
+```
 
+```ruby
 # app/models/deltum.rb
 class Deltum < ApplicationRecord
-  # Rails does not validate that the target of a `has_one` exists so `has_one`
-  # naturally creates a `{0..1}` relationship
-  has_one :charlie,
-          # Setting inverse_of is generally a good practice
-          inverse_of: :deltum,
-
-          # It isn't part of creating the relationship but it is good practice to
-          # always explicitly choose a value for `dependent` option. `nil` (do
-          # nothing) is the default. See
-          # https://api.rubyonrails.org/v6.1.3.2/classes/ActiveRecord/Associations/ClassMethods.html#method-i-belongs_to
-          # for details.
-          dependent: nil
+  # Rails does not validate that the target of a `has_one` exists so it
+  # naturally creats a 0..1 relationship.
+  #
+  # inverse_of:
+  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   remember the various edge cases where it is required and/or recommended.
+  has_one :charlie, inverse_of: :deltum,
 end
+```
 
+```ruby
 # db/migrate/20210705071426_connect_charlie_and_deltum.rb
 class ConnectCharlieAndDeltum < ActiveRecord::Migration[6.1]
   def change
@@ -346,6 +514,12 @@ class ConnectCharlieAndDeltum < ActiveRecord::Migration[6.1]
     # * Create a non-unique index on 'charlies.deltum_id' for performance reasons
     # * Create a foreign key constraint on 'charlies.deltum_id' to reference 'deltums.id'.
     add_belongs_to :charlies, :deltum, foreign_key: true, null: false
+
+    # TO ENABLE AUTOMATIC DELETION:
+    # Use the line below if you want to automatically delete the associated
+    # Charlie when you delete a Deltum. Only enable this if it makes sense in
+    # the context of your data model.
+    # add_belongs_to :charlies, :deltum, foreign_key: { on_delete: :cascade }, null: false
 
     # Database **after** this migration has run:
     #
@@ -378,6 +552,144 @@ class ConnectCharlieAndDeltum < ActiveRecord::Migration[6.1]
 end
 ```
 
+```ruby
+# spec/models/charlie_deltum_relationship_spec.rb
+require "rails_helper"
+
+##
+# These specs exist to help explain the relationship. You shouldn't copy these
+# directly into your app without considering whether they provide long-term
+# value to you.
+#
+RSpec.describe "Charlie {0..1} <--> {1} Deltum", type: :model do
+  describe "Charlie has {1} Deltum" do
+    it "Charlie is not valid with 0 Deltum" do
+      charlie = Charlie.new
+
+      expect(charlie.deltum).to eq(nil)
+      expect(charlie.valid?).to eq(false)
+    end
+
+    it "Charlie cannot be saved with 0 Deltum (when validations enabled)" do
+      charlie = Charlie.new
+      expect { charlie.save! }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it "Charlie cannot be saved with 0 Deltum (when validations disabled)" do
+      charlie = Charlie.new
+      expect { charlie.save!(validate: false) }.to raise_error(ActiveRecord::NotNullViolation)
+    end
+
+    it "Charlie is valid with 1 Deltum" do
+      deltum = Deltum.new
+      charlie = Charlie.new(deltum: deltum)
+
+      expect(charlie.valid?).to eq(true)
+    end
+
+    it "Charlie can be saved with 1 Deltum (when validations enabled)" do
+      deltum = Deltum.new
+      charlie = Charlie.new(deltum: deltum)
+
+      charlie.save!
+
+      expect(charlie.persisted?).to eq(true)
+    end
+
+    it "Charlie can be saved with 1 Deltum (when validations disabled)" do
+      deltum = Deltum.new
+      charlie = Charlie.new(deltum: deltum)
+
+      charlie.save!(validate: false)
+
+      expect(charlie.persisted?).to eq(true)
+    end
+
+    it "Deleting a Charlie does nothing to the Deltum" do
+      # Deltume has {0..1} Charlie
+      # so it's fine for the Deltum to exist without the Charlie
+      deltum = Deltum.create!
+      charlie = Charlie.create!(deltum: deltum)
+
+      charlie.destroy
+
+      expect(Deltum.count).to eq(1)
+      expect(Deltum.first.charlie).to eq(nil)
+    end
+  end
+
+  describe "Deltum has {0..1} Charlie" do
+    it "Deltum is valid with 0 Charlie" do
+      deltum = Deltum.new
+
+      expect(deltum.charlie).to eq(nil)
+      expect(deltum.valid?).to eq(true)
+    end
+
+    it "Deltum can be saved with 0 Charlie (when validations enabled)" do
+      deltum = Deltum.new
+
+      deltum.save!
+
+      expect(deltum.persisted?).to eq(true)
+    end
+
+    it "Deltum can be saved with 0 Charlie (when validations disabled)" do
+      deltum = Deltum.new
+
+      deltum.save!(validate: false)
+
+      expect(deltum.persisted?).to eq(true)
+    end
+
+    it "Deltum is valid with 1 Charlie" do
+      charlie = Charlie.new
+      deltum = Deltum.new(charlie: charlie)
+
+      expect(deltum.valid?).to eq(true)
+    end
+
+    it "Deltum can be saved with 1 Charlie (when validations enabled)" do
+      charlie = Charlie.new
+      deltum = Deltum.new(charlie: charlie)
+
+      deltum.save!
+
+      expect(deltum.persisted?).to eq(true)
+    end
+
+    it "Deltum can be saved with 1 Charlie (when validations disabled)" do
+      charlie = Charlie.new
+      deltum = Deltum.new(charlie: charlie)
+
+      deltum.save!(validate: false)
+
+      expect(deltum.persisted?).to eq(true)
+    end
+
+    # If deleting a Deltum should automatically delete the corresponding
+    # Charlie, see the migration for details on how to implement this.
+    it "Attempting to delete a Deltum with 1 associated Charlie fails" do
+      deltum = Deltum.create!
+      charlie = Charlie.create!(deltum: deltum)
+
+      expect { deltum.destroy }.to raise_error(ActiveRecord::InvalidForeignKey)
+
+      expect(Charlie.count).to eq(1)
+      expect(Deltum.count).to eq(1)
+    end
+
+    it "Deleting a Deltum with 0 associated Charlie succeeds" do
+      deltum = Deltum.create!
+
+      deltum.destroy!
+
+      expect(Deltum.count).to eq(0)
+    end
+  end
+end
+```
+
 #### Implementation score card:
 
 | Q                                           | A                  |
@@ -394,6 +706,10 @@ Things to watch out for:
 * You must set `belongs_to(..., optional: true)` to make that side of the relationship `{0..1}`.
 * You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
 * Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
+
+Deletion behaviour
+
+    TODO
 
 #### Example code
 
@@ -418,7 +734,9 @@ class Golf < ApplicationRecord
              # for details.
              dependent: nil
 end
+```
 
+```ruby
 # app/models/hotel.rb
 class Hotel < ApplicationRecord
   has_many :golves,
@@ -437,7 +755,9 @@ class Hotel < ApplicationRecord
   # bunch of Rails API for doing things skipping validations.
   validates :captains, presence: true
 end
+```
 
+```ruby
 # db/migrate/20210705184309_connect_golf_to_hotel.rb
 class ConnectGolfToHotel < ActiveRecord::Migration[6.1]
   def change
@@ -692,3 +1012,5 @@ Pros/cons
 ## Sources
 
 * "All for One, One for all" paper by C.J. Date http://www.dcs.warwick.ac.uk/~hugh/TTM/AllforOne.pdf
+* https://docs.gitlab.com/ee/development/foreign_keys.html
+* TODO: rails guides
