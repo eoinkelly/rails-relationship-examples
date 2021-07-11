@@ -7,7 +7,7 @@ class ConnectGolfToHotel < ActiveRecord::Migration[6.1]
     # * Allow 'golfs.hotel_id' to be NULL. This is what creates the `0..` bit of the relationship
     # * Create a non-unique index on 'golfs.hotel_id' for performance reasons
     # * Create a foreign key constraint on 'golfs.hotel_id' to reference 'hotels.id'.
-    add_belongs_to :golves, :hotel, foreign_key: true, null: true
+    add_belongs_to :golves, :hotel, foreign_key: { on_delete: :nullify }, null: true
 
     # Database **after** this migration has run:
     #
@@ -23,7 +23,7 @@ class ConnectGolfToHotel < ActiveRecord::Migration[6.1]
     # "golves_pkey" PRIMARY KEY, btree (id)
     # "index_golves_on_hotel_id" btree (hotel_id)
     # Foreign-key constraints:
-    # "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id)
+    # "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL
 
     # relationship_examples_development=# \d hotels
     #     Table "public.hotels"
@@ -35,6 +35,6 @@ class ConnectGolfToHotel < ActiveRecord::Migration[6.1]
     # Indexes:
     # "hotels_pkey" PRIMARY KEY, btree (id)
     # Referenced by:
-    # TABLE "golves" CONSTRAINT "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id)
+    # TABLE "golves" CONSTRAINT "fk_rails_eae96cbc5f" FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL
   end
 end

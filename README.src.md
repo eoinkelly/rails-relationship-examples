@@ -30,7 +30,31 @@ The dependent option implements itself with callbacks I presume
 I think it might still be required for polymorphic associations
 =========================
 
+notation
 
+crow foot
+  https://vertabelo.com/blog/crow-s-foot-notation/
+  default for lucidchart
+> While crow's foot notation is often recognized as the most intuitive style,
+> some use OMT, IDEF, Bachman, or UML notation, according to their preferences.
+> Crow's foot notation, however, has an intuitive graphic format, making it the
+> preferred ERD notation for Lucidchart.
+
+diagrams can try to show "deletion"/lifetime stuff too
+https://vertabelo.com/blog/uml-notation/
+
+To compare ERD notations, take a look at :
+
+Chen notation
+UML notation
+Barker notation
+Arrow notation
+IDEF1X notation
+
+crow feet seems best to me
+
+but rails-erd ues a very simple default but provides a more detailed one called "bachman"
+https://voormedia.github.io/rails-erd/gallery.html#notation s
 ```
 
 This repo is my attempt to clarify some best practices for myself around:
@@ -43,6 +67,8 @@ This repo is my attempt to clarify some best practices for myself around:
     - [Confusion around what "relationship" actually means](#confusion-around-what-relationship-actually-means)
   - [How many possible kinds of relationship?](#how-many-possible-kinds-of-relationship)
   - [Modelling the 10 kinds of relationship in Rails](#modelling-the-10-kinds-of-relationship-in-rails)
+      - [When is the dependent option good/bad/required?](#when-is-the-dependent-option-goodbadrequired)
+      - [SQL Databases have limited support for enforcing 1..N relationships](#sql-databases-have-limited-support-for-enforcing-1n-relationships)
       - [Explicit inverse_of](#explicit-inverse_of)
       - [Important points to take away (common to all the implementations below):](#important-points-to-take-away-common-to-all-the-implementations-below)
     - [1. {0..1} to {0..1}](#1-01-to-01)
@@ -53,6 +79,7 @@ This repo is my attempt to clarify some best practices for myself around:
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
+      - [Deletions](#deletions-1)
       - [Example code](#example-code-2)
       - [Implementation score card:](#implementation-score-card-2)
     - [4. {0..N} to {0..1}](#4-0n-to-01)
@@ -177,21 +204,24 @@ Next we should look at how to implement these in Rails.
 
 ## Modelling the 10 kinds of relationship in Rails
 
-1.  `{0..1} to {0..1}`
-2.  `{1}    to {0..1}`
-3.  `{1..N} to {0..1}`
-4.  `{0..N} to {0..1}`
-5.  `{1}    to {1}`
-6.  `{1..N} to {1}`
-7.  `{0..N} to {1}`
-8.  `{1..N} to {1..N}`
-9.  `{0..N} to {1..N}`
-10. `{0..N} to {0..N}`
+| #   | Relationship       | Enforced by DB | Breaks if you skip callbacks | Breaks if you skip validations |
+| --- | ------------------ | -------------- | ---------------------------- | ------------------------------ |
+| 1.  | `{0..1} to {0..1}` | Yes            | No                           | No                             |
+| 2.  | `{1}    to {0..1}` | Yes            | No                           | No                             |
+| 3.  | `{1..N} to {0..1}` | Partially      | Yes                          | Yes                            |
+| 4.  | `{0..N} to {0..1}` |                |                              |                                |
+| 5.  | `{1}    to {1}`    |                |                              |                                |
+| 6.  | `{1..N} to {1}`    |                |                              |                                |
+| 7.  | `{0..N} to {1}`    |                |                              |                                |
+| 8.  | `{1..N} to {1..N}` |                |                              |                                |
+| 9.  | `{0..N} to {1..N}` |                |                              |                                |
+| 10. | `{0..N} to {0..N}` |                |                              |                                |
 
 Rails implements relationships with a mixture of the following tools:
 
 1. Relationship macros e.g. `belongs_to`, `has_one` etc. and the options you pass to them
 1. Model validations
+1. Model callbacks
 1. Database constraints created in migrations
 
 We consider Rails validations as "advisory" rather than "enforcing" because they can be skipped e.g. `my_model.save(validate: false)`.  Therefore the best outcome for implementing a relationship will use **both** Rails validations (whether explicitly added by `validates` or implicitly added by the relationship macros) **and** Database constraints.
@@ -217,6 +247,55 @@ Your decision tree when implementing a relationship in Rails should be:
       database migration details
       deletion behaviour options
       ??? others
+
+#### When is the dependent option good/bad/required?
+
+
+    https://docs.gitlab.com/ee/development/foreign_keys.html
+      says it's bad for perf
+
+    https://rails.rubystyle.guide/#has_many-has_one-dependent-option requires it  for has_one, has_many
+
+    but I think there are cases where it is required?
+      once i've worked through the 10 options I'll have a better idea of this
+
+####  SQL Databases have limited support for enforcing 1..N relationships
+
+SQL **declarative** constraints have the following reach:
+
+* Value reach
+    * NOT NULL
+        * can only reference data within the value being checked
+* Row reach
+    * CHECK constraint
+        * can only reference data within the single row being checked
+* Single table reach
+    * UNIQUE constraint
+        * can reference data within the same table
+    * EXCLUDE
+        * a more general form of UNIQUE constraint (where the operator doesn't have to be `=`)
+* Cross table reach
+    * FOREIGN KEY
+        * says that a value must be included in the set of values in some other column in another table
+        * can say waht should happen to the matching rows in the other table when this row is updated/deleted
+
+So FOREIGN KEY is the only constraint that can check data across tables. And FOREIGN KEY cannot say
+
+> If you create a row in A then some row in B must have a referenc to it
+
+
+    Q: are there things to manage triggers in Rails? secenic alike?
+
+So to build some kinds of relationship, we can't get by with declarative SQL statemetns alone and we need to write code to help enforce the relationship.
+
+This code can be embedded in the database itself and executed via triggers or it can exist at the application layer. In this document we will put all the logic in the application because that is generally more flexible and easier to maintain than database triggers. More specifically this code will be a set of `ActiveRecord` callbacks.
+
+This weakness in SQL leads to a weakness in our implementations. Because some of the logic is enforced at the application layer, it can be *skipped** e.g. if you use ActiveRecord methods which skip callbacks (e.g. `my_model.delete`) or validations e.g. `my_model.save(validate: false)`. This is unfortunate but currently unavoidable.
+
+This document:
+
+1. Tries to leverage declarative SQL as much as possible to enforce the relationship because it is faster to write an execute.
+2. Falls back to Rails callbacks when necessary because they are easier to manage than database trigger code
 
 #### Explicit inverse_of
 
@@ -362,6 +441,15 @@ INCLUDE_FILE spec/models/charlie_deltum_relationship_spec.rb
 
 ### 3. {1..N} to {0..1}
 
+Consider the following relationship:
+
+    Golf {1..N} to {0..1} Hotel
+
+which reads as:
+
+    Golf has 0..1 Hotel
+    Hotel has 1..N Golf
+
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_many` macros.
 
 Things to watch out for:
@@ -370,9 +458,36 @@ Things to watch out for:
 * You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
 * Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
 
-Deletion behaviour
+#### Deletions
 
-    TODO
+The bidirectional relationship
+
+    Golf {1..N} to {0..1} Hotel
+
+does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
+
+try to delete a Hotel
+  it must have at least 1 golf associated
+  but we can just nullify the golf side because golf can have 0 hotel
+try to delete a Golf
+  it might have a hotel
+  deleting the golf might mean that the Hotel goes down to having 0 golf which is forbidden
+
+To implement a DB constraint to prevent leaving a Hotel with 0 Golf when you delete a Golf, we would need a constraint on `golves.hotel_id` where every row in `hotels` must appear at least once in `golves.hotel_id`.
+this would require a postgres `CHECK CONSTRAINT` which can look beyond the current row which isn't supported so this is impossible.
+
+Rails validations won't work because our starting point is valid data saved in the DB - it's the deletion that creates invalid data
+
+Options we have for implementing this:
+
+1. A `BEFORE DELETE` trigger in the database but we use
+2. A Rails `before_destroy` instead.
+
+    TODO: why not the trigger? Surely it would be more strict? What are the downsides?
+      == postgres recommends triggers for this https://www.postgresql.org/docs/9.1/trigger-definition.html
+      -- perf
+      -- fiddly implementation, the logic for the model is now partially in the DB trigger too
+      -- goes against Rails philosophy of treating the database like a fairly dumb storage layer
 
 #### Example code
 
@@ -388,11 +503,16 @@ INCLUDE_FILE app/models/hotel.rb
 INCLUDE_FILE db/migrate/20210705184309_connect_golf_to_hotel.rb
 ```
 
+```ruby
+INCLUDE_FILE spec/models/golf_hotel_relationship_spec.rb
+```
+
 #### Implementation score card:
 
 | Q                                           | A                  |
 | ------------------------------------------- | ------------------ |
-| Relationship integrity enforced by Database | :x:                |
+| A has 0..1 B integrity enforced by Database | :white_check_mark: |
+| B has 1..N A integrity enforced by Database | :x:                |
 | The best we can do?                         | :white_check_mark: |
 
       TODO: check presence validation works
