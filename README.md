@@ -355,7 +355,10 @@ Rails' use of synthetic id columns for primary keys is a good thing and avoids a
 
 * Some relationships have more than one possible deletion behaviour.
 
-  TODO: expand on this
+The description of the relationships does not always tell you how deletions should be handled.
+
+    this seems like a big gap in how we talk about modelling? we never talk about it?
+    TODO: expand on this
 
 ## Part 3: The 10 kinds of relationship in Rails
 
@@ -385,6 +388,7 @@ Deletion behaviour
 
 * Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship.
 
+
 #### Implementation score card:
 
 | Q                                           | A                  |
@@ -402,7 +406,7 @@ class Alfa < ApplicationRecord
   #   i.e. Instances of `Alfa` will not be valid unless they have a connected
   #   `Bravo`. We want Alfas to have 0..1 Bravos so we must add `optional: true`.
   # inverse_of:
-  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   We choose to always set an explicit  `inverse_of` so that we don't have to
   #   remember the various edge cases where it is required and/or recommended.
   belongs_to :bravo, optional: true, inverse_of: :alfa
 end
@@ -412,10 +416,10 @@ end
 # app/models/bravo.rb
 class Bravo < ApplicationRecord
   # Rails does not validate that the target of a `has_one` exists so it
-  # naturally creats a 0..1 relationship.
+  # naturally creates a 0..1 relationship.
   #
   # inverse_of:
-  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   We choose to always set an explicit  `inverse_of` so that we don't have to
   #   remember the various edge cases where it is required and/or recommended.
   has_one :alfa, inverse_of: :bravo
 end
@@ -582,7 +586,7 @@ does not, on its own, tell you how deletions should be handled. You need to choo
 
 For example, when you attempt to delete a Deltum which has an associated Charlie, then that Charlie will be in an forbidden state i.e. the Charlie will exist without a Deltum.
 
-There are 2 options:
+There are two options:
 
 1. Fail the attempt to delete the Deltum with an error.
     * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
@@ -601,7 +605,7 @@ class Charlie < ApplicationRecord
   # `Bravo`. This naturally creates a {1} relationship.
   #
   # inverse_of:
-  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   We choose to always set an explicit  `inverse_of` so that we don't have to
   #   remember the various edge cases where it is required and/or recommended.
   belongs_to :deltum, inverse_of: :charlie
 end
@@ -614,7 +618,7 @@ class Deltum < ApplicationRecord
   # naturally creats a 0..1 relationship.
   #
   # inverse_of:
-  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   We choose to always set an explicit  `inverse_of` so that we don't have to
   #   remember the various edge cases where it is required and/or recommended.
   has_one :charlie, inverse_of: :deltum
 end
@@ -845,12 +849,12 @@ The bidirectional relationship
 
 does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
 
-try to delete a Hotel
-  it must have at least 1 golf associated
-  but we can just nullify the golf side because golf can have 0 hotel
-try to delete a Golf
-  it might have a hotel
-  deleting the golf might mean that the Hotel goes down to having 0 golf which is forbidden
+* try to delete a Hotel
+  * it must have at least 1 golf associated
+  * but we can just nullify the golf side because golf can have 0 hotel
+* try to delete a Golf
+  * it might have a hotel
+  * deleting the golf might mean that the Hotel goes down to having 0 golf which is forbidden
 
 To implement a DB constraint to prevent leaving a Hotel with 0 Golf when you delete a Golf, we would need a constraint on `golves.hotel_id` where every row in `hotels` must appear at least once in `golves.hotel_id`.
 this would require a postgres `CHECK CONSTRAINT` which can look beyond the current row which isn't supported so this is impossible.
@@ -860,13 +864,15 @@ Rails validations won't work because our starting point is valid data saved in t
 Options we have for implementing this:
 
 1. A `BEFORE DELETE` trigger in the database but we use
-2. A Rails `before_destroy` instead.
+2. A Rails `before_destroy` callback.
 
-    TODO: why not the trigger? Surely it would be more strict? What are the downsides?
-      == postgres recommends triggers for this https://www.postgresql.org/docs/9.1/trigger-definition.html
-      -- perf
-      -- fiddly implementation, the logic for the model is now partially in the DB trigger too
-      -- goes against Rails philosophy of treating the database like a fairly dumb storage layer
+```
+TODO: why not the trigger? Surely it would be more strict? What are the downsides?
+  == postgres recommends triggers for this https://www.postgresql.org/docs/9.1/trigger-definition.html
+  -- perf
+  -- fiddly implementation, the logic for the model is now partially in the DB trigger too
+  -- goes against Rails philosophy of treating the database like a fairly dumb storage layer
+```
 
 #### Example code
 
@@ -879,7 +885,7 @@ class Golf < ApplicationRecord
   #   `Hotel`. We want Glof to have 0..1 Bravos so we must add `optional: true`.
   #
   # inverse_of:
-  #   We choose to always set and explicit `inverse_of` so that we don't have to
+  #   We choose to always set an explicit  `inverse_of` so that we don't have to
   #   remember the various edge cases where it is required and/or recommended.
   #
   # dependent:
