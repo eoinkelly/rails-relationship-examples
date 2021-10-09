@@ -20,6 +20,8 @@ RSpec.describe "Charlie {0..1} <--> {1} Deltum", type: :model do
     end
 
     it "Charlie cannot be saved with 0 Deltum (when validations disabled)" do
+      # this demonstrates that even when Rails validations are skipped, the
+      # database constraint will enforce the relationship
       charlie = Charlie.new
       expect { charlie.save!(validate: false) }.to raise_error(ActiveRecord::NotNullViolation)
     end
@@ -50,7 +52,7 @@ RSpec.describe "Charlie {0..1} <--> {1} Deltum", type: :model do
     end
 
     it "Deleting a Charlie does nothing to the Deltum" do
-      # Deltume has {0..1} Charlie
+      # Deltum has {0..1} Charlie
       # so it's fine for the Deltum to exist without the Charlie
       deltum = Deltum.create!
       charlie = Charlie.create!(deltum: deltum)

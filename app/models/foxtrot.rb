@@ -6,9 +6,6 @@ class Foxtrot < ApplicationRecord
           # does not cause any enforcement to happen at the database layer.
           required: true,
 
-          # Setting inverse_of is generally a good practice
-          inverse_of: :foxtrot,
-
           # It isn't part of creating the relationship but it is good practice to
           # always explicitly choose a value for `dependent` option. `nil` (do
           # nothing) is the default. See

@@ -3,30 +3,36 @@
 - [Modelling relationships between database entities](#modelling-relationships-between-database-entities)
   - [Why?](#why)
   - [Part 1: Just enough data modelling to get by](#part-1-just-enough-data-modelling-to-get-by)
-    - [The problem: our terms are fuzzy](#the-problem-our-terms-are-fuzzy)
-    - [Cardinality vs multiplicity](#cardinality-vs-multiplicity)
+    - [Problem: Fuzzy language](#problem-fuzzy-language)
+    - [Problem: It's easy to forget to specify deletion behaviour](#problem-its-easy-to-forget-to-specify-deletion-behaviour)
+    - [Problem: Cardinality vs multiplicity](#problem-cardinality-vs-multiplicity)
       - [Multiplicity](#multiplicity)
-    - [Notations](#notations)
+    - [Problem: Many notations](#problem-many-notations)
     - [Relationships come in pairs](#relationships-come-in-pairs)
       - [Reading relationship pair diagrams](#reading-relationship-pair-diagrams)
     - [How many kinds of relationship exist?](#how-many-kinds-of-relationship-exist)
   - [Part 2: Overview of relationships in Rails](#part-2-overview-of-relationships-in-rails)
     - [Problem: SQL Databases have limited support for enforcing 1..N relationships](#problem-sql-databases-have-limited-support-for-enforcing-1n-relationships)
-    - [Problem: Explicit inverse_of can't be used everywhere](#problem-explicit-inverse_of-cant-be-used-everywhere)
     - [Rails does not create foreign key constraints by default in migrations.](#rails-does-not-create-foreign-key-constraints-by-default-in-migrations)
-    - [Always add an index to the foreign key column (WIP)](#always-add-an-index-to-the-foreign-key-column-wip)
-    - [Rails' synthetic ID columns are a good thing](#rails-synthetic-id-columns-are-a-good-thing)
-    - [Deletion behaviour (WIP)](#deletion-behaviour-wip)
+    - [??? Good thing: Rails automatically adds an index to the foreign key column (WIP)](#-good-thing-rails-automatically-adds-an-index-to-the-foreign-key-column-wip)
+    - [Good thing: Rails' synthetic ID columns](#good-thing-rails-synthetic-id-columns)
   - [Part 3: The 10 kinds of relationship in Rails](#part-3-the-10-kinds-of-relationship-in-rails)
     - [1. {0..1} to {0..1}](#1-01-to-01)
-      - [Implementation score card:](#implementation-score-card)
+      - [Choose deletion behaviour](#choose-deletion-behaviour)
+      - [Choose macros](#choose-macros)
+      - [Choose which side gets each macro](#choose-which-side-gets-each-macro)
+      - [Choose migration options](#choose-migration-options)
       - [Example code](#example-code)
+      - [Implementation score card:](#implementation-score-card)
     - [2. {0..1} to {1}](#2-01-to-1)
-      - [Deletions](#deletions)
+      - [Choose deletion behaviour](#choose-deletion-behaviour-1)
+      - [Choose macros](#choose-macros-1)
+      - [Choose which side gets each macro](#choose-which-side-gets-each-macro-1)
+      - [Choose migration options](#choose-migration-options-1)
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
-      - [Deletions](#deletions-1)
+      - [Deletions](#deletions)
       - [Example code](#example-code-2)
       - [Implementation score card:](#implementation-score-card-2)
     - [4. {0..N} to {0..1}](#4-0n-to-01)
@@ -42,14 +48,14 @@
 
 ## Why?
 
-This repo is my attempt to clarify some best practices around:
+This guide is an attempt to clarify some best practices around:
 
 1. Clear thinking and clear communicating around data modelling
 2. Implementing those models in Rails in the best way possible
 
 ## Part 1: Just enough data modelling to get by
 
-### The problem: our terms are fuzzy
+### Problem: Fuzzy language
 
 > The biggest problem in communication is the illusion that it has taken place
 >
@@ -76,7 +82,18 @@ Fuzzy terms can be _ok_ if *everybody* involved already has good knowledge of th
 
 However we aren't always working with a domain that we understand or with a team where everybody understands the business domain. This document will discuss entities _A_ and _B_ so we have to rely solely on what's in the diagram rather than expertise we already have on the domain.
 
-### Cardinality vs multiplicity
+### Problem: It's easy to forget to specify deletion behaviour
+
+Database design tools and diagrams often don't specify what should happen when a record on each side of the relationship is deleted but we still need to choose a deletion behaviour as part of our design process.
+
+There are generally four deletion behaviours we choose from:
+
+1. Take No Action
+1. Nullify the referencing column
+1. Automatically delete all referencing rows when a row is deleted (Cascade delete)
+1. Raise an error
+
+### Problem: Cardinality vs multiplicity
 
 When we are modelling data, we need to describe the size of collections e.g.
 
@@ -130,7 +147,7 @@ There are some short-cuts we can take
 | 0..*         | Collection can be empty or contain an infinite number of things |
 | *            | means the same as above                                         |
 
-### Notations
+### Problem: Many notations
 
 There are a number of notations for drawing diagrams when we are modelling data e.g.
 
@@ -268,16 +285,16 @@ We consider Rails validations as "advisory" rather than "enforcing" because they
 
 It isn't always possible to achieve this outcome. And sometimes, while the outcome is possible, there are trade-offs which make us choose not to.
 
-Your decision tree when implementing a relationship in Rails should be:
+Implementing a relationship in Rails has two phases:
 
-1. Look up the relationship from the list below
-2. Decide on deletion behaviour aka lifetimes
-    * This is nto always required ?
-    * TODO: list which ones it is required
-
-
-    TODO: IDEA: a decision tree diagram
-
+1. Planning Phase
+    1. Choose a relationship from the 10 possible
+    1. Choose a deletion behaviour for that relationship
+1. Implement Phase
+    1. Choose macros and options
+    1. Choose which side to put each macro
+    1. Implement migration
+    1. Add validations and callbacks if required
 
 ### Problem: SQL Databases have limited support for enforcing 1..N relationships
 
@@ -321,44 +338,20 @@ In these examples we:
 1. Try to leverage declarative SQL as much as possible to enforce the relationship because it is safer and executes faster.
 2. Fall back to Rails callbacks when necessary because they are easier to manage than database trigger code.
 
-### Problem: Explicit inverse_of can't be used everywhere
-
-Rails will attempt to automatically guess the inverse relationship in many cases. This automatic detection fails if
-
-* You use custom foreign key name with `foreign_key: ` option on the association
-* You add a custom scope to the association
-* You use the `through:` option on the association
-* The class names do not line up such that Rails can guess the class name.
-
-Because of the large number of cases where automatic inverse guessing does not work, we think it is clearer to always add an explicit `inverse_of` so that you don't have to remember those edge cases. All the examples below specify an explicit `:inverse_of` option.
-
-Your team may choose to rely on Rails' automatic `inverse_of` guessing without harming the quality of the implementation, provided the whole team understands the exceptions above and adds explicit `inverse_of` options where required.
-
 ### Rails does not create foreign key constraints by default in migrations.
 
 Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option whenever possible.
 
-### Always add an index to the foreign key column (WIP)
+### ??? Good thing: Rails automatically adds an index to the foreign key column (WIP)
 
-Always add an index to the foreign key column
+We should always add an index to the foreign key column
+particularly if you are using the "cascading delete" deletion behaviour (it will generally make that much faster)
 
-* because it makes cascading deletes acceptably fast (Not 100% on this one yet)
-* Do we care about the index if we don't have cascading deletes???
+    TODO: Does Rails **always** do this? it seems to but I haven't checked all cases
 
-    TODO: does rails create it implicitly???
-
-### Rails' synthetic ID columns are a good thing
+### Good thing: Rails' synthetic ID columns
 
 Rails' use of synthetic id columns for primary keys is a good thing and avoids a lot of problems. It avoids potentially expensive `ON UPDATE` options in our foreign key constraints.
-
-### Deletion behaviour (WIP)
-
-* Some relationships have more than one possible deletion behaviour.
-
-The description of the relationships does not always tell you how deletions should be handled.
-
-    this seems like a big gap in how we talk about modelling? we never talk about it?
-    TODO: expand on this
 
 ## Part 3: The 10 kinds of relationship in Rails
 
@@ -366,7 +359,6 @@ The description of the relationships does not always tell you how deletions shou
 
 Consider the following relationship:
 
-    Alfa {0..1} to {0..1} Bravo
     [Alfa]0..1__________0..1[Bravo]
 
 which reads as:
@@ -374,27 +366,49 @@ which reads as:
     Alfa has 0..1 Bravo
     Bravo has 0..1 Alfa
 
+#### Choose deletion behaviour
+
+There is only one deletion behaviour for this bidirectional relationship - nullify.
+
+Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship. This is implemented via a foreign key constraint in the database.
+
+#### Choose macros
+
 Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
-It does not matter in which model we put the `belongs_to` (it does matter for some relationships) so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
-
-Things to watch out for:
-
-* Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option in the migration.
 * Rails will validate a `belongs_to` relationship by default so we need to add the `optional: true` option to make the relationship a `0..1`
-* Rails will not validate a `has_one` relationship by default.
+* Rails will not validate a `has_one` relationship by default so it naturally creates a `0..1`
 
-Deletion behaviour
+#### Choose which side gets each macro
 
-* Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship.
+It does not matter in which model we put the `belongs_to` for this relationship pair so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
 
+#### Choose migration options
 
-#### Implementation score card:
+`null: true` is a default migration option. We explicitly add it because allowing null values is an important part of this relationship so it is better to be explicit.
 
-| Q                                           | A                  |
-| ------------------------------------------- | ------------------ |
-| Relationship integrity enforced by Database | :white_check_mark: |
-| Recommended                                 | :white_check_mark: |
+Rails does not create foreign key constraints by default. I don't know why. It _might_ be because
+
+* SQLite didn't support them out of the box and Rails was trying to be as database agnostic as possible.
+* Rails implemented deletion support as options to the `has_*` macros e.g. `has_many :things, dependent: :nullify`
+
+Anyway I think it's a bad default.
+
+Foreign key constraints are very important for maintaining data integrity so we need to add the `foreign_key:` option in the migration. Without the foreign key, when you delete a Bravo then the Alfa will still have a "dangling pointer" to it
+
+```ruby
+# BEST: creates foreign key which nullifies on delete
+add_belongs_to :alfas, :bravo, foreign_key: { on_delete: :nullify } # BEST
+
+# OK: Causes a PG::ForeignKeyViolation to be raised if you try to delete a bravo
+# referenced by an alfa. Avoids data integrity issues but forces you to deal
+# with exceptions.
+add_belongs_to :alfas, :bravo , foreign_key: true # OK
+
+# BAD: no foreign key. Will allow Alfa.bravo_id to reference a row which no
+# longer exists. Creates data integrity issues
+add_belongs_to :alfas, :bravo # BAD
+```
 
 #### Example code
 
@@ -402,13 +416,11 @@ Deletion behaviour
 # app/models/alfa.rb
 class Alfa < ApplicationRecord
   # optional: true
-  #   Rails 5+ by default will validate that the target of a `belongs_to` exists
-  #   i.e. Instances of `Alfa` will not be valid unless they have a connected
-  #   `Bravo`. We want Alfas to have 0..1 Bravos so we must add `optional: true`.
-  # inverse_of:
-  #   We choose to always set an explicit  `inverse_of` so that we don't have to
-  #   remember the various edge cases where it is required and/or recommended.
-  belongs_to :bravo, optional: true, inverse_of: :alfa
+  #     Rails 5+ by default will validate that the target of a `belongs_to` exists
+  #     i.e. Instances of `Alfa` will not be valid unless they have a connected
+  #     `Bravo`. We want Alfas to have 0..1 Bravos so we must add `optional: true`.
+  #
+  belongs_to :bravo, optional: true
 end
 ```
 
@@ -418,10 +430,7 @@ class Bravo < ApplicationRecord
   # Rails does not validate that the target of a `has_one` exists so it
   # naturally creates a 0..1 relationship.
   #
-  # inverse_of:
-  #   We choose to always set an explicit  `inverse_of` so that we don't have to
-  #   remember the various edge cases where it is required and/or recommended.
-  has_one :alfa, inverse_of: :bravo
+  has_one :alfa
 end
 ```
 
@@ -553,6 +562,13 @@ RSpec.describe "Alfa {0..1} <--> {0..1} Bravo", type: :model do
 end
 ```
 
+#### Implementation score card:
+
+| Q                                           | A                  |
+| ------------------------------------------- | ------------------ |
+| Relationship integrity enforced by Database | :white_check_mark: |
+| Recommended                                 | :white_check_mark: |
+
 ### 2. {0..1} to {1}
 
 Consider the following relationship:
@@ -564,19 +580,7 @@ which reads as:
     Charlie has exactly 1 Deltum
     Deltum has 0..1 Charlie
 
-Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros. Does it matter which model we put the `belongs_to` in? Yes.
-
-The model with the `belongs_to` macro will have an extra column added to its database table. That column contains the id of the related record in the other table.
-
-We can then create a database constraint (remember, those are the "enforcing" kind) which says that the new column cannot be empty. This effectively requires that the relationship exist and the database will refuse to save a record which violates this rule.
-
-However, the other database table has no extra column so we have nothing to apply a database constraint to. It is _technically_ possible to create such a constraint with a database trigger but it's not common to do so.
-
-The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at the database layer, we must put the new column (the foreign key) in the table which has the `{1}` half of the bidirectional relationship. Hence, we must put the `belongs_to` in the model that is the `{1}`
-
-Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
-
-#### Deletions
+#### Choose deletion behaviour
 
 The bidirectional relationship
 
@@ -591,9 +595,33 @@ There are two options:
 1. Fail the attempt to delete the Deltum with an error.
     * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
     * This is the default behaviour when the `on_delete` option is not specified in the migration
-    * This is also the option we use in the code example below.
+    * **This is also the option we use in the code example below.**
 2. Automatically Delete the associated Charlie when the Deltum is deleted
     * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails. See the comments in the migration file below for details on how to enable this automatic deletion.
+
+#### Choose macros
+
+Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros.
+
+#### Choose which side gets each macro
+
+It is very important that we put the `belongs_to` in the correct model.
+
+The model with the `belongs_to` macro will have an extra column added to its database table. That column contains the id of the related record in the other table.
+
+We can then create a database constraint (remember, those are the "enforcing" kind) which says that the new column cannot be empty. This effectively requires that the relationship exist and the database will refuse to save a record which violates this rule.
+
+However, the other database table has no extra column so we have nothing to apply a database constraint to. It is _technically_ possible to create such a constraint with a database trigger but it's not common to do so.
+
+The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at the database layer, we must put the new column (the foreign key) in the table which has the `{1}` half of the bidirectional relationship.
+
+Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
+
+#### Choose migration options
+
+`foreign_key: true` corresponds to Postgres `NO ACTION` which will raise an error when you attempt to delete a record which is referenced by the foreign key column.
+
+`null:false` is required to ensure that the foreign key always has a value (this enforces the `{1}` direction of the relationship).
 
 #### Example code
 
@@ -604,10 +632,7 @@ class Charlie < ApplicationRecord
   # i.e. Instances of `Alfa` will not be valid unless they have a connected
   # `Bravo`. This naturally creates a {1} relationship.
   #
-  # inverse_of:
-  #   We choose to always set an explicit  `inverse_of` so that we don't have to
-  #   remember the various edge cases where it is required and/or recommended.
-  belongs_to :deltum, inverse_of: :charlie
+  belongs_to :deltum
 end
 ```
 
@@ -617,10 +642,7 @@ class Deltum < ApplicationRecord
   # Rails does not validate that the target of a `has_one` exists so it
   # naturally creats a 0..1 relationship.
   #
-  # inverse_of:
-  #   We choose to always set an explicit  `inverse_of` so that we don't have to
-  #   remember the various edge cases where it is required and/or recommended.
-  has_one :charlie, inverse_of: :deltum
+  has_one :charlie
 end
 ```
 
@@ -884,14 +906,10 @@ class Golf < ApplicationRecord
   #   i.e. Instances of `Golf` will not be valid unless they have a connected
   #   `Hotel`. We want Glof to have 0..1 Bravos so we must add `optional: true`.
   #
-  # inverse_of:
-  #   We choose to always set an explicit  `inverse_of` so that we don't have to
-  #   remember the various edge cases where it is required and/or recommended.
-  #
   # dependent:
   #   We do not specify it here. It is not recommended to set it to anything
   #   other than it's default "do nothing" value.
-  belongs_to :hotel, optional: true, inverse_of: :golves
+  belongs_to :hotel, optional: true
 
   before_destroy :check_hotel_still_would_still_have_at_least_one_golf
 
@@ -913,8 +931,6 @@ end
 ```ruby
 # app/models/hotel.rb
 class Hotel < ApplicationRecord
-  has_many :golves, inverse_of: :hotel
-
   # Use a validation to try to "enforce" that a Hotel always has {1..N} Golves
   # i.e. **at least** 1 Golf. This isn't really enforcing because there is a
   # bunch of Rails API for doing things skipping validations.

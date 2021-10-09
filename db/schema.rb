@@ -10,16 +10,31 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2021_07_05_184309) do
+ActiveRecord::Schema.define(version: 2021_07_10_220648) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "aaas", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
+  end
+
+  create_table "aaas_bbbs", id: false, force: :cascade do |t|
+    t.bigint "aaa_id", null: false
+    t.bigint "bbb_id", null: false
+  end
 
   create_table "alfas", force: :cascade do |t|
     t.datetime "created_at", precision: 6, null: false
     t.datetime "updated_at", precision: 6, null: false
     t.bigint "bravo_id"
     t.index ["bravo_id"], name: "index_alfas_on_bravo_id"
+  end
+
+  create_table "bbbs", force: :cascade do |t|
+    t.datetime "created_at", precision: 6, null: false
+    t.datetime "updated_at", precision: 6, null: false
   end
 
   create_table "bravos", force: :cascade do |t|
@@ -63,8 +78,10 @@ ActiveRecord::Schema.define(version: 2021_07_05_184309) do
     t.datetime "updated_at", precision: 6, null: false
   end
 
-  add_foreign_key "alfas", "bravos", on_delete: :nullify
+  add_foreign_key "aaas_bbbs", "aaas"
+  add_foreign_key "aaas_bbbs", "bbbs"
+  add_foreign_key "alfas", "bravos"
   add_foreign_key "charlies", "delta"
   add_foreign_key "echos", "foxtrots"
-  add_foreign_key "golves", "hotels"
+  add_foreign_key "golves", "hotels", on_delete: :nullify
 end

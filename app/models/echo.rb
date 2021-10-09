@@ -5,9 +5,6 @@ class Echo < ApplicationRecord
              # `Deltum` unless we set this value
              optional: true,
 
-             # Setting inverse_of is generally a good practice
-             inverse_of: :echo,
-
              # It isn't part of creating the relationship but it is good practice to
              # always explicitly choose a value for `dependent` option. `nil` (do
              # nothing) is the default. See
