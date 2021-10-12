@@ -34,7 +34,28 @@ Planning Phase
 
 Implement Phase
 
+1. Overview
 1. Choose macros and options
-1. Choose which side to put each macro
-1. Implement migration
+1. Choose which side gets each macro
+1. Choose migration options
 1. Add validations and callbacks if required
+
+TEMPLATE =====================================================
+
+#### Overview
+
+
+#### Choose deletion behaviour
+
+
+#### Choose macros and options
+
+
+#### Choose which side gets each macro
+
+
+#### Choose migration options
+
+
+#### Add validations and callbacks (if required)
+

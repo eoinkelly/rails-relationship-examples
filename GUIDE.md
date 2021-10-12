@@ -4,7 +4,7 @@
   - [Introduction](#introduction)
   - [Part 1: Just enough data modelling to get by](#part-1-just-enough-data-modelling-to-get-by)
     - [Problem: Fuzzy language](#problem-fuzzy-language)
-    - [Problem: It's easy to forget to specify deletion behaviour](#problem-its-easy-to-forget-to-specify-deletion-behaviour)
+    - [The 4 deletion behaviours](#the-4-deletion-behaviours)
     - [Problem: Cardinality vs multiplicity](#problem-cardinality-vs-multiplicity)
       - [Multiplicity](#multiplicity)
     - [Problem: Many notations](#problem-many-notations)
@@ -18,21 +18,30 @@
     - [Good thing: Rails' synthetic ID columns](#good-thing-rails-synthetic-id-columns)
   - [Part 3: The 10 kinds of relationship in Rails](#part-3-the-10-kinds-of-relationship-in-rails)
     - [1. {0..1} to {0..1}](#1-01-to-01)
+      - [Overview](#overview)
       - [Choose deletion behaviour](#choose-deletion-behaviour)
-      - [Choose macros](#choose-macros)
+      - [Choose macros and options](#choose-macros-and-options)
       - [Choose which side gets each macro](#choose-which-side-gets-each-macro)
       - [Choose migration options](#choose-migration-options)
+      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required)
       - [Example code](#example-code)
       - [Implementation score card:](#implementation-score-card)
     - [2. {0..1} to {1}](#2-01-to-1)
+      - [Overview](#overview-1)
       - [Choose deletion behaviour](#choose-deletion-behaviour-1)
-      - [Choose macros](#choose-macros-1)
+      - [Choose macros and options](#choose-macros-and-options-1)
       - [Choose which side gets each macro](#choose-which-side-gets-each-macro-1)
       - [Choose migration options](#choose-migration-options-1)
+      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required-1)
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
-      - [Deletions](#deletions)
+      - [Overview](#overview-2)
+      - [Choose deletion behaviour](#choose-deletion-behaviour-2)
+      - [Choose macros and options](#choose-macros-and-options-2)
+      - [Choose which side gets each macro](#choose-which-side-gets-each-macro-2)
+      - [Choose migration options](#choose-migration-options-2)
+      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required-2)
       - [Example code](#example-code-2)
       - [Implementation score card:](#implementation-score-card-2)
     - [4. {0..N} to {0..1}](#4-0n-to-01)
@@ -84,16 +93,17 @@ Fuzzy terms can be _ok_ if *everybody* involved already has good knowledge of th
 
 However we aren't always working with a domain that we understand or with a team where everybody understands the business domain. This document will discuss entities _A_ and _B_ so we have to rely solely on what's in the diagram rather than expertise we already have on the domain.
 
-### Problem: It's easy to forget to specify deletion behaviour
+### The 4 deletion behaviours
 
-Database design tools and diagrams often don't specify what should happen when a record on each side of the relationship is deleted but we still need to choose a deletion behaviour as part of our design process.
+Database design tools and diagrams usually don't specify what should happen when a record on each side of the relationship is deleted but we still need to choose a deletion behaviour as part of our design process.
 
-There are generally four deletion behaviours we choose from:
+There are four deletion behaviours we choose from:
 
-1. Take No Action
-1. Nullify the referencing column
-1. Automatically delete all referencing rows when a row is deleted (Cascade delete)
-1. Raise an error
+1. Refuse to delete the record and raise an exception (common)
+1. Nullify the referencing column (common).
+1. Take No Action (common if any side of the relationship can have 0 items i.e. `0..`).
+    * We need to be careful with this one to ensure we don't leave a DB column with a reference to an ID in another table which no longer exists!
+1. Automatically delete all referencing rows when a row is deleted, also known as a _Cascade delete_ (uncommon)
 
 ### Problem: Cardinality vs multiplicity
 
@@ -359,6 +369,8 @@ Rails' use of synthetic id columns for primary keys is a good thing and avoids a
 
 ### 1. {0..1} to {0..1}
 
+#### Overview
+
 Consider the following relationship:
 
     [Alfa]0..1__________0..1[Bravo]
@@ -374,7 +386,7 @@ There is only one deletion behaviour for this bidirectional relationship - nulli
 
 Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship. This is implemented via a foreign key constraint in the database.
 
-#### Choose macros
+#### Choose macros and options
 
 Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
@@ -412,6 +424,9 @@ add_belongs_to :alfas, :bravo , foreign_key: true # OK
 add_belongs_to :alfas, :bravo # BAD
 ```
 
+#### Add validations and callbacks (if required)
+
+This relationship does not require any ActiveRecord validations or callbacks.
 
 #### Example code
 
@@ -574,6 +589,8 @@ end
 
 ### 2. {0..1} to {1}
 
+#### Overview
+
 Consider the following relationship:
 
     Charlie {0..1} to {1} Deltum
@@ -602,7 +619,7 @@ There are two options:
 2. Automatically Delete the associated Charlie when the Deltum is deleted
     * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails. See the comments in the migration file below for details on how to enable this automatic deletion.
 
-#### Choose macros
+#### Choose macros and options
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros.
 
@@ -625,6 +642,10 @@ Another way of thinking about this is that `belongs_to` can create a `{1}` backe
 `foreign_key: true` corresponds to Postgres `NO ACTION` which will raise an error when you attempt to delete a record which is referenced by the foreign key column.
 
 `null:false` is required to ensure that the foreign key always has a value (this enforces the `{1}` direction of the relationship).
+
+#### Add validations and callbacks (if required)
+
+This relationship does not require any ActiveRecord validations or callbacks.
 
 #### Example code
 
@@ -849,6 +870,8 @@ end
 
 ### 3. {1..N} to {0..1}
 
+#### Overview
+
 Consider the following relationship:
 
     Gopher {1..N} to {0..1} Hotel
@@ -858,21 +881,20 @@ which reads as:
     Gopher has 0..1 Hotel
     Hotel has 1..N Gopher
 
-Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_many` macros.
-
-Things to watch out for:
-
-* You must set `belongs_to(..., optional: true)` to make that side of the relationship `{0..1}`.
-* You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
-* Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
-
-#### Deletions
+#### Choose deletion behaviour
 
 The bidirectional relationship
 
     Gopher {1..N} to {0..1} Hotel
 
-does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
+does not, on its own, tell us what should happen when associated records are deleted.
+
+There are two questions we need to answer:
+
+1. What should happen to any associated Hotel when we delete a Gopher?
+2. What should happen to any associated Gophers when we delete a Hotel?
+
+The answer will depend on your data model but we can work through the options
 
 * try to delete a Hotel
   * it must have at least 1 gopher associated
@@ -898,6 +920,23 @@ TODO: why not the trigger? Surely it would be more strict? What are the downside
   -- fiddly implementation, the logic for the model is now partially in the DB trigger too
   -- goes against Rails philosophy of treating the database like a fairly dumb storage layer
 ```
+
+#### Choose macros and options
+
+Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_many` macros.
+
+
+#### Choose which side gets each macro
+
+You must set `belongs_to(..., optional: true)` to make that side of the relationship `{0..1}`.
+
+#### Choose migration options
+
+You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
+
+#### Add validations and callbacks (if required)
+
+Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
 
 #### Example code
 
