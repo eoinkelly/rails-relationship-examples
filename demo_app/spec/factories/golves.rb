@@ -1,5 +1,4 @@
 FactoryBot.define do
-  factory :bbb do
-    
+  factory :gopher do
   end
 end

@@ -1,8 +1,5 @@
 class CreateAaas < ActiveRecord::Migration[6.1]
   def change
-    create_table :aaas do |t|
-
-      t.timestamps
-    end
+    create_table :aaas, &:timestamps
   end
 end

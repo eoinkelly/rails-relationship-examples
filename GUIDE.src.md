@@ -1,7 +1,7 @@
-# Modelling relationships between database entities
+# A guide to database modelling with Rails
 
-- [Modelling relationships between database entities](#modelling-relationships-between-database-entities)
-  - [Why?](#why)
+- [A guide to database modelling with Rails](#a-guide-to-database-modelling-with-rails)
+  - [Introduction](#introduction)
   - [Part 1: Just enough data modelling to get by](#part-1-just-enough-data-modelling-to-get-by)
     - [Problem: Fuzzy language](#problem-fuzzy-language)
     - [Problem: It's easy to forget to specify deletion behaviour](#problem-its-easy-to-forget-to-specify-deletion-behaviour)
@@ -46,12 +46,14 @@
       - [Using has_many through:](#using-has_many-through)
   - [Sources](#sources)
 
-## Why?
+## Introduction
 
-This guide is an attempt to clarify some best practices around:
+I wrote this to clarify my own thinking and communication of
 
-1. Clear thinking and clear communicating around data modelling
-2. Implementing those models in Rails in the best way possible
+1. Database modelling
+2. Implementing those models in Rails
+
+I hope you find it useful.
 
 ## Part 1: Just enough data modelling to get by
 
@@ -410,22 +412,23 @@ add_belongs_to :alfas, :bravo , foreign_key: true # OK
 add_belongs_to :alfas, :bravo # BAD
 ```
 
+
 #### Example code
 
 ```ruby
-INCLUDE_FILE app/models/alfa.rb
+INCLUDE_FILE demo_app/app/models/alfa.rb
 ```
 
 ```ruby
-INCLUDE_FILE app/models/bravo.rb
+INCLUDE_FILE demo_app/app/models/bravo.rb
 ```
 
 ```ruby
-INCLUDE_FILE db/migrate/20210704022223_connect_alfa_and_bravo.rb
+INCLUDE_FILE demo_app/db/migrate/20210704022223_connect_alfa_and_bravo.rb
 ```
 
 ```ruby
-INCLUDE_FILE spec/models/alfa_bravo_relationship_spec.rb
+INCLUDE_FILE demo_app/spec/models/alfa_bravo_relationship_spec.rb
 ```
 
 #### Implementation score card:
@@ -492,19 +495,19 @@ Another way of thinking about this is that `belongs_to` can create a `{1}` backe
 #### Example code
 
 ```ruby
-INCLUDE_FILE app/models/charlie.rb
+INCLUDE_FILE demo_app/app/models/charlie.rb
 ```
 
 ```ruby
-INCLUDE_FILE app/models/deltum.rb
+INCLUDE_FILE demo_app/app/models/deltum.rb
 ```
 
 ```ruby
-INCLUDE_FILE db/migrate/20210705071426_connect_charlie_and_deltum.rb
+INCLUDE_FILE demo_app/db/migrate/20210705071426_connect_charlie_and_deltum.rb
 ```
 
 ```ruby
-INCLUDE_FILE spec/models/charlie_deltum_relationship_spec.rb
+INCLUDE_FILE demo_app/spec/models/charlie_deltum_relationship_spec.rb
 ```
 
 #### Implementation score card:
@@ -518,12 +521,12 @@ INCLUDE_FILE spec/models/charlie_deltum_relationship_spec.rb
 
 Consider the following relationship:
 
-    Golf {1..N} to {0..1} Hotel
+    Gopher {1..N} to {0..1} Hotel
 
 which reads as:
 
-    Golf has 0..1 Hotel
-    Hotel has 1..N Golf
+    Gopher has 0..1 Hotel
+    Hotel has 1..N Gopher
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_many` macros.
 
@@ -537,18 +540,18 @@ Things to watch out for:
 
 The bidirectional relationship
 
-    Golf {1..N} to {0..1} Hotel
+    Gopher {1..N} to {0..1} Hotel
 
 does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
 
 * try to delete a Hotel
-  * it must have at least 1 golf associated
-  * but we can just nullify the golf side because golf can have 0 hotel
-* try to delete a Golf
+  * it must have at least 1 gopher associated
+  * but we can just nullify the gopher side because gopher can have 0 hotel
+* try to delete a Gopher
   * it might have a hotel
-  * deleting the golf might mean that the Hotel goes down to having 0 golf which is forbidden
+  * deleting the gopher might mean that the Hotel goes down to having 0 gopher which is forbidden
 
-To implement a DB constraint to prevent leaving a Hotel with 0 Golf when you delete a Golf, we would need a constraint on `golves.hotel_id` where every row in `hotels` must appear at least once in `golves.hotel_id`.
+To implement a DB constraint to prevent leaving a Hotel with 0 Gopher when you delete a Gopher, we would need a constraint on `gophers.hotel_id` where every row in `hotels` must appear at least once in `gophers.hotel_id`.
 this would require a postgres `CHECK CONSTRAINT` which can look beyond the current row which isn't supported so this is impossible.
 
 Rails validations won't work because our starting point is valid data saved in the DB - it's the deletion that creates invalid data
@@ -569,19 +572,19 @@ TODO: why not the trigger? Surely it would be more strict? What are the downside
 #### Example code
 
 ```ruby
-INCLUDE_FILE app/models/golf.rb
+INCLUDE_FILE demo_app/app/models/gopher.rb
 ```
 
 ```ruby
-INCLUDE_FILE app/models/hotel.rb
+INCLUDE_FILE demo_app/app/models/hotel.rb
 ```
 
 ```ruby
-INCLUDE_FILE db/migrate/20210705184309_connect_golf_to_hotel.rb
+INCLUDE_FILE demo_app/db/migrate/20210705184309_connect_gopher_to_hotel.rb
 ```
 
 ```ruby
-INCLUDE_FILE spec/models/golf_hotel_relationship_spec.rb
+INCLUDE_FILE demo_app/spec/models/gopher_hotel_relationship_spec.rb
 ```
 
 #### Implementation score card:

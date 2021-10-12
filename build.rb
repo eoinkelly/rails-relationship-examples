@@ -1,8 +1,8 @@
 require "fileutils"
 
-INPUT_PATH = File.join(__dir__, "README.src.md")
-BACKUP_PATH = File.join(__dir__, "README.md.gitignored.backup")
-OUTPUT_PATH = File.join(__dir__, "README.md")
+INPUT_PATH = File.join(__dir__, "GUIDE.src.md")
+BACKUP_PATH = File.join(__dir__, "GUIDE.md.gitignored.backup")
+OUTPUT_PATH = File.join(__dir__, "GUIDE.md")
 
 def do_build # rubocop:disable Metrics/MethodLength
   puts "[Building]"

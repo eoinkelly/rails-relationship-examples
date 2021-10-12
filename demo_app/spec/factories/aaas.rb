@@ -1,4 +1,4 @@
 FactoryBot.define do
-  factory :golf do
+  factory :aaa do
   end
 end

@@ -11,9 +11,9 @@ class ConnectCharlieAndDeltum < ActiveRecord::Migration[6.1]
     add_belongs_to :charlies, :deltum, foreign_key: true, null: false
 
     # TO ENABLE AUTOMATIC DELETION:
-    # Use the line below if you want to automatically delete the associated
-    # Charlie when you delete a Deltum. Only enable this if it makes sense in
-    # the context of your data model.
+    # Replace the line above with the line below if you want to automatically
+    # delete the associated Charlie when you delete a Deltum. Only enable this
+    # if it makes sense in the context of your data model.
     # add_belongs_to :charlies, :deltum, foreign_key: { on_delete: :cascade }, null: false
 
     # Database **after** this migration has run:

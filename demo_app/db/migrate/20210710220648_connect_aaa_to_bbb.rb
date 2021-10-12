@@ -20,7 +20,6 @@ class ConnectAaaToBbb < ActiveRecord::Migration[6.1]
     # add a unique constraint on the aaa_id col of the join model
     # so that each aaa row can only appear once in the table
 
-
     # I want each bbb row to always have at least one entry in the join table
     # so i need to reject any create to bbbs which doesn't also add it ot the join table
     # and reject any removal of a value from the bbb_id col in the join table unless the corresponding bbb row is being removed too
@@ -30,7 +29,6 @@ class ConnectAaaToBbb < ActiveRecord::Migration[6.1]
     # The join table is used for joining. The duplicate col (bbbs.aaa_id) is used to ensure there is always one
     # For this to work, the ORM (or wahtever code you use to manage the relationship) needs to support it
     # Rails does not.
-
 
     # so in SQL
     # is it true to say that
