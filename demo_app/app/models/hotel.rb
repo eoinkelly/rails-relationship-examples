@@ -1,8 +1,14 @@
 class Hotel < ApplicationRecord
+  has_many :gophers
+
   # Use a validation to try to "enforce" that a Hotel always has {1..N} Gophers
-  # i.e. **at least** 1 Gopher. This isn't really enforcing because there is a
-  # bunch of Rails API for doing things skipping validations.
-  # Also this only kicks in for operations on Hotel, it won't cover operations on Gopher
+  # i.e. **at least** 1 Gopher. Using a presence validation on the association
+  # is the recommended Rails way to validate that an associated object exists -
+  # see https://guides.rubyonrails.org/active_record_validations.html#presence
+  #
+  # This isn't really "enforcing" because there are ActiveRecord methods which
+  # skip validations.  Also this only works for operations on Hotel - it won't
+  # prevent any operations on Gopher so we must also implement a
+  # `before_destroy` callback in Gopher.
   validates :gophers, presence: true
-  # TODO: is this the right validation? should it be "has at least one" or similar?
 end

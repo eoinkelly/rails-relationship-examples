@@ -80,7 +80,7 @@ ActiveRecord::Schema.define(version: 2021_07_10_220648) do
 
   add_foreign_key "aaas_bbbs", "aaas"
   add_foreign_key "aaas_bbbs", "bbbs"
-  add_foreign_key "alfas", "bravos"
+  add_foreign_key "alfas", "bravos", on_delete: :nullify
   add_foreign_key "charlies", "delta"
   add_foreign_key "echos", "foxtrots"
   add_foreign_key "gophers", "hotels", on_delete: :nullify

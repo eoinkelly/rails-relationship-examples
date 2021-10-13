@@ -19,29 +19,29 @@
   - [Part 3: The 10 kinds of relationship in Rails](#part-3-the-10-kinds-of-relationship-in-rails)
     - [1. {0..1} to {0..1}](#1-01-to-01)
       - [Overview](#overview)
-      - [Choose deletion behaviour](#choose-deletion-behaviour)
-      - [Choose macros and options](#choose-macros-and-options)
-      - [Choose which side gets each macro](#choose-which-side-gets-each-macro)
-      - [Choose migration options](#choose-migration-options)
-      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required)
+      - [Choose: macros and options](#choose-macros-and-options)
+      - [Choose: which side gets each macro](#choose-which-side-gets-each-macro)
+      - [Choose: deletion behaviour](#choose-deletion-behaviour)
+      - [Implement: migration options](#implement-migration-options)
+      - [Implement: Add validations and callbacks (if required)](#implement-add-validations-and-callbacks-if-required)
       - [Example code](#example-code)
       - [Implementation score card:](#implementation-score-card)
     - [2. {0..1} to {1}](#2-01-to-1)
       - [Overview](#overview-1)
-      - [Choose deletion behaviour](#choose-deletion-behaviour-1)
-      - [Choose macros and options](#choose-macros-and-options-1)
-      - [Choose which side gets each macro](#choose-which-side-gets-each-macro-1)
-      - [Choose migration options](#choose-migration-options-1)
-      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required-1)
+      - [Choose: macros and options](#choose-macros-and-options-1)
+      - [Choose: which side gets each macro](#choose-which-side-gets-each-macro-1)
+      - [Choose: deletion behaviour](#choose-deletion-behaviour-1)
+      - [Implement: migration options](#implement-migration-options-1)
+      - [Implement: Add validations and callbacks (if required)](#implement-add-validations-and-callbacks-if-required-1)
       - [Example code](#example-code-1)
       - [Implementation score card:](#implementation-score-card-1)
     - [3. {1..N} to {0..1}](#3-1n-to-01)
       - [Overview](#overview-2)
-      - [Choose deletion behaviour](#choose-deletion-behaviour-2)
-      - [Choose macros and options](#choose-macros-and-options-2)
-      - [Choose which side gets each macro](#choose-which-side-gets-each-macro-2)
-      - [Choose migration options](#choose-migration-options-2)
-      - [Add validations and callbacks (if required)](#add-validations-and-callbacks-if-required-2)
+      - [Choose: deletion behaviour](#choose-deletion-behaviour-2)
+      - [Choose: macros and options](#choose-macros-and-options-2)
+      - [Choose: which side gets each macro](#choose-which-side-gets-each-macro-2)
+      - [Implement: migration options](#implement-migration-options-2)
+      - [Implement: Add validations and callbacks (if required)](#implement-add-validations-and-callbacks-if-required-2)
       - [Example code](#example-code-2)
       - [Implementation score card:](#implementation-score-card-2)
     - [4. {0..N} to {0..1}](#4-0n-to-01)
@@ -274,17 +274,17 @@ Next we will look at how to implement these in Rails.
 We know now that there are 10 possible DB relationships that we can create so now we look at what the best way to imlement those in Rails.
 
 | #   | Relationship       | Enforced in DB by SQL alone | Breaks if you skip callbacks | Breaks if you skip validations |
-| --- | ------------------ | -------------- | ---------------------------- | ------------------------------ |
-| 1.  | `{0..1} to {0..1}` | Yes            | No                           | No                             |
-| 2.  | `{1}    to {0..1}` | Yes            | No                           | No                             |
-| 3.  | `{1..N} to {0..1}` | Partially      | Yes                          | Yes                            |
-| 4.  | `{0..N} to {0..1}` |                |                              |                                |
-| 5.  | `{1}    to {1}`    |                |                              |                                |
-| 6.  | `{1..N} to {1}`    |                |                              |                                |
-| 7.  | `{0..N} to {1}`    |                |                              |                                |
-| 8.  | `{1..N} to {1..N}` |                |                              |                                |
-| 9.  | `{0..N} to {1..N}` |                |                              |                                |
-| 10. | `{0..N} to {0..N}` |                |                              |                                |
+| --- | ------------------ | --------------------------- | ---------------------------- | ------------------------------ |
+| 1.  | `{0..1} to {0..1}` | Yes                         | No                           | No                             |
+| 2.  | `{1}    to {0..1}` | Yes                         | No                           | No                             |
+| 3.  | `{1..N} to {0..1}` | Partially                   | Yes                          | Yes                            |
+| 4.  | `{0..N} to {0..1}` |                             |                              |                                |
+| 5.  | `{1}    to {1}`    |                             |                              |                                |
+| 6.  | `{1..N} to {1}`    |                             |                              |                                |
+| 7.  | `{0..N} to {1}`    |                             |                              |                                |
+| 8.  | `{1..N} to {1..N}` |                             |                              |                                |
+| 9.  | `{0..N} to {1..N}` |                             |                              |                                |
+| 10. | `{0..N} to {0..N}` |                             |                              |                                |
 
 Rails implements relationships with a mixture of the following tools:
 
@@ -354,6 +354,30 @@ In these examples we:
 
 Rails does not create foreign key constraints by default in migrations. These constraints are very important for maintaining data integrity so we need to add the `foreign_key: true` option whenever possible.
 
+Rails does not create foreign key constraints by default. I don't know why. It _might_ be because
+
+* SQLite didn't support them out of the box and Rails was trying to be as database agnostic as possible.
+* Rails implemented deletion support as options to the `has_*` macros e.g. `has_many :things, dependent: :nullify`
+
+Anyway I think it's a bad default.
+
+Foreign key constraints are very important for maintaining data integrity so we need to add the `foreign_key:` option in the migration. Without the foreign key, when you delete a Bravo then the Alfa will still have a "dangling pointer" to it
+
+```ruby
+# BEST: creates foreign key which nullifies on delete
+add_belongs_to :alfas, :bravo, foreign_key: { on_delete: :nullify } # BEST
+
+# OK: Causes a PG::ForeignKeyViolation to be raised if you try to delete a bravo
+# referenced by an alfa. Avoids data integrity issues but forces you to deal
+# with exceptions.
+add_belongs_to :alfas, :bravo , foreign_key: true # OK
+
+# BAD: no foreign key. Will allow Alfa.bravo_id to reference a row which no
+# longer exists. Creates data integrity issues
+add_belongs_to :alfas, :bravo # BAD
+```
+
+
 ### ??? Good thing: Rails automatically adds an index to the foreign key column (WIP)
 
 We should always add an index to the foreign key column
@@ -380,51 +404,41 @@ which reads as:
     Alfa has 0..1 Bravo
     Bravo has 0..1 Alfa
 
-#### Choose deletion behaviour
-
-There is only one deletion behaviour for this bidirectional relationship - nullify.
-
-Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model. Instead it should nullify the relationship. This is implemented via a foreign key constraint in the database.
-
-#### Choose macros and options
+#### Choose: macros and options
 
 Rails implements this using a combination of the `belongs_to` and `has_one` macros.
 
 * Rails will validate a `belongs_to` relationship by default so we need to add the `optional: true` option to make the relationship a `0..1`
 * Rails will not validate a `has_one` relationship by default so it naturally creates a `0..1`
 
-#### Choose which side gets each macro
+#### Choose: which side gets each macro
 
 It does not matter in which model we put the `belongs_to` for this relationship pair so in our example we arbitrarily put `belongs_to` in `Alfa` and `has_one` in `Bravo`.
 
-#### Choose migration options
+#### Choose: deletion behaviour
+
+See part 1 for some background on deletion options.
+
+Both sides of the relationship can be 0 i.e. the relationship is optional in both directions. This means that deleting the model on either side of the relationship should not delete the other model.
+
+Instead it should nullify the relationship. This is implemented via a foreign key constraint in the database.
+
+Assuming we put the foreign key in Alfa (i.e. we create the `alfas.bravo_id` column) then
+
+| Deletion behaviour option | When deleting an Alfa | When deleting a Bravo |
+| ------------------------- | --------------------- | --------------------- |
+| Raise error               | N/A                   | N/A                   |
+| Do nothing                | :white_check_mark:    | --                    |
+| Cascade delete            | N/A                   | N/A                   |
+| Nullify foreign key       | --                    | :white_check_mark:    |
+
+#### Implement: migration options
 
 `null: true` is a default migration option. We explicitly add it because allowing null values is an important part of this relationship so it is better to be explicit.
 
-Rails does not create foreign key constraints by default. I don't know why. It _might_ be because
+Rails does not create foreign key constraints by default so we explicitly create one.
 
-* SQLite didn't support them out of the box and Rails was trying to be as database agnostic as possible.
-* Rails implemented deletion support as options to the `has_*` macros e.g. `has_many :things, dependent: :nullify`
-
-Anyway I think it's a bad default.
-
-Foreign key constraints are very important for maintaining data integrity so we need to add the `foreign_key:` option in the migration. Without the foreign key, when you delete a Bravo then the Alfa will still have a "dangling pointer" to it
-
-```ruby
-# BEST: creates foreign key which nullifies on delete
-add_belongs_to :alfas, :bravo, foreign_key: { on_delete: :nullify } # BEST
-
-# OK: Causes a PG::ForeignKeyViolation to be raised if you try to delete a bravo
-# referenced by an alfa. Avoids data integrity issues but forces you to deal
-# with exceptions.
-add_belongs_to :alfas, :bravo , foreign_key: true # OK
-
-# BAD: no foreign key. Will allow Alfa.bravo_id to reference a row which no
-# longer exists. Creates data integrity issues
-add_belongs_to :alfas, :bravo # BAD
-```
-
-#### Add validations and callbacks (if required)
+#### Implement: Add validations and callbacks (if required)
 
 This relationship does not require any ActiveRecord validations or callbacks.
 
@@ -582,7 +596,7 @@ end
 
 #### Implementation score card:
 
-| Q                                           | A                  |
+| Attribute                                   | Result             |
 | ------------------------------------------- | ------------------ |
 | Relationship integrity enforced by Database | :white_check_mark: |
 | Recommended                                 | :white_check_mark: |
@@ -600,30 +614,11 @@ which reads as:
     Charlie has exactly 1 Deltum
     Deltum has 0..1 Charlie
 
-#### Choose deletion behaviour
-
-The bidirectional relationship
-
-    Charlie {0..1} to {1} Deltum
-
-does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
-
-For example, when you attempt to delete a Deltum which has an associated Charlie, then that Charlie will be in an forbidden state i.e. the Charlie will exist without a Deltum.
-
-There are two options:
-
-1. Fail the attempt to delete the Deltum with an error.
-    * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
-    * This is the default behaviour when the `on_delete` option is not specified in the migration
-    * **This is also the option we use in the code example below.**
-2. Automatically Delete the associated Charlie when the Deltum is deleted
-    * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails. See the comments in the migration file below for details on how to enable this automatic deletion.
-
-#### Choose macros and options
+#### Choose: macros and options
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_one` macros.
 
-#### Choose which side gets each macro
+#### Choose: which side gets each macro
 
 It is very important that we put the `belongs_to` in the correct model.
 
@@ -637,13 +632,48 @@ The bottom line is that if we want to enforce a `{0..1} to {1}` relationship at 
 
 Another way of thinking about this is that `belongs_to` can create a `{1}` backed by database constraints but `has_one` cannot.
 
-#### Choose migration options
+#### Choose: deletion behaviour
+
+The bidirectional relationship
+
+    Charlie {0..1} to {1} Deltum
+
+does not, on its own, tell you how deletions should be handled. You need to choose that as part of your implementation.
+
+For example, when you attempt to delete a Deltum which has an associated Charlie, then that Charlie will be in an forbidden state i.e. the Charlie will exist without a Deltum.
+
+There are two options:
+
+1. Fail the attempt to delete the Deltum with an error (**common**)
+    * This allows the application to decide how to handle the error e.g. it might assign the associated Charlie a new Deltum before attempting to delete the Deltum again or it might signal the error to the user or logs.
+    * This is the default behaviour when the `on_delete` option is not specified in the migration
+
+    | Deletion behaviour option | When deleting a Charlie | When deleting a Deltum |
+    | ------------------------- | ----------------------- | ---------------------- |
+    | Raise error               |                         | :white_check_mark:     |
+    | Do nothing                | :white_check_mark:      |                        |
+    | Cascade delete            |                         |                        |
+    | Nullify foreign key       |                         |                        |
+2. Automatically Delete the associated Charlie when the Deltum is deleted (**only use if appropriate**)
+    * This _may_ be appropriate for your data model. It is very easy to opt-in to automatic deletion with Rails.
+    * See the comments in the migration file below for details on how to enable this automatic deletion.
+
+    | Deletion behaviour option | When deleting a Charlie | When deleting a Deltum |
+    | ------------------------- | ----------------------- | ---------------------- |
+    | Raise error               |                         |                        |
+    | Do nothing                | :white_check_mark:      |                        |
+    | Cascade delete            |                         | :white_check_mark:     |
+    | Nullify foreign key       |                         |                        |
+
+*We choose the first option (raising an error) in the code example below*
+
+#### Implement: migration options
 
 `foreign_key: true` corresponds to Postgres `NO ACTION` which will raise an error when you attempt to delete a record which is referenced by the foreign key column.
 
 `null:false` is required to ensure that the foreign key always has a value (this enforces the `{1}` direction of the relationship).
 
-#### Add validations and callbacks (if required)
+#### Implement: Add validations and callbacks (if required)
 
 This relationship does not require any ActiveRecord validations or callbacks.
 
@@ -863,7 +893,7 @@ end
 
 #### Implementation score card:
 
-| Q                                           | A                  |
+| Attribute                                   | Result             |
 | ------------------------------------------- | ------------------ |
 | Relationship integrity enforced by Database | :white_check_mark: |
 | Recommended                                 | :white_check_mark: |
@@ -881,7 +911,7 @@ which reads as:
     Gopher has 0..1 Hotel
     Hotel has 1..N Gopher
 
-#### Choose deletion behaviour
+#### Choose: deletion behaviour
 
 The bidirectional relationship
 
@@ -894,47 +924,49 @@ There are two questions we need to answer:
 1. What should happen to any associated Hotel when we delete a Gopher?
 2. What should happen to any associated Gophers when we delete a Hotel?
 
+
+| Deletion behaviour option  | When deleting a Gopher | When deleting a Hotel |
+| -------------------------- | ---------------------- | --------------------- |
+| Raise error                | :white_check_mark:     |                       |
+| Do nothing                 |                        | :white_check_mark:    |
+| Cascade delete             |                        |                       |
+| Nullify foreign key column |                        |                       |
+
 The answer will depend on your data model but we can work through the options
 
-* try to delete a Hotel
+* When you try to delete a Hotel:
   * it must have at least 1 gopher associated
   * but we can just nullify the gopher side because gopher can have 0 hotel
-* try to delete a Gopher
-  * it might have a hotel
-  * deleting the gopher might mean that the Hotel goes down to having 0 gopher which is forbidden
+* When you try to delete a Gopher:
+  * it might have an associated Hotel
+  * deleting the Gopher might mean that the Hotel will then have 0 gophers which is forbidden
 
-To implement a DB constraint to prevent leaving a Hotel with 0 Gopher when you delete a Gopher, we would need a constraint on `gophers.hotel_id` where every row in `hotels` must appear at least once in `gophers.hotel_id`.
-this would require a postgres `CHECK CONSTRAINT` which can look beyond the current row which isn't supported so this is impossible.
+What about SQL?
 
-Rails validations won't work because our starting point is valid data saved in the DB - it's the deletion that creates invalid data
+To implement a database constraint to prevent leaving a Hotel with 0 Gopher when you delete a Gopher, we would need a constraint on `gophers.hotel_id` where every row in `hotels` must appear at least once in `gophers.hotel_id`. This kind of constraint does not exist declaratively in databases but it can be implemented with a `BEFORE DELETE` trigger.
 
-Options we have for implementing this:
+What about Rails?
 
-1. A `BEFORE DELETE` trigger in the database but we use
-2. A Rails `before_destroy` callback.
+We need to hook into "just before the delete happens" so we can check both sides of the relationship to see what they would look like if the delete happens. Rails lets us do this with a `before_destroy` callback.
 
-```
-TODO: why not the trigger? Surely it would be more strict? What are the downsides?
-  == postgres recommends triggers for this https://www.postgresql.org/docs/9.1/trigger-definition.html
-  -- perf
-  -- fiddly implementation, the logic for the model is now partially in the DB trigger too
-  -- goes against Rails philosophy of treating the database like a fairly dumb storage layer
-```
+In this guide, we will choose the Rails `before_destroy` callback because it is generally accepted to be easier ot maintain. Your team may make a different choice.
 
-#### Choose macros and options
+
+#### Choose: macros and options
 
 Rails implements this bidirectional relationship a combination of the `belongs_to` and `has_many` macros.
 
-
-#### Choose which side gets each macro
-
 You must set `belongs_to(..., optional: true)` to make that side of the relationship `{0..1}`.
 
-#### Choose migration options
+#### Choose: which side gets each macro
+
+There is only one choice for which side gets which macro.
+
+#### Implement: migration options
 
 You must set `null: true` in the migration to match the `belongs_to(..., optional: true)` model.
 
-#### Add validations and callbacks (if required)
+#### Implement: Add validations and callbacks (if required)
 
 Rails has no `has_many(..., required: true)` to make that side of the relationship `{1..N}` so we use a presence validation. Note this does not add any database enforcement of the relationship.
 
@@ -947,23 +979,26 @@ class Gopher < ApplicationRecord
   #   Rails 5+ by default will validate that the target of a `belongs_to` exists
   #   i.e. Instances of `Gopher` will not be valid unless they have a connected
   #   `Hotel`. We want Glof to have 0..1 Bravos so we must add `optional: true`.
-  #
-  # dependent:
-  #   We do not specify it here. It is not recommended to set it to anything
-  #   other than it's default "do nothing" value.
   belongs_to :hotel, optional: true
 
+  # Prevent destroying this object if the asociated Hotel would have no Gophers
+  # afterwards.
   before_destroy :check_hotel_still_would_still_have_at_least_one_gopher
 
   private
 
   def check_hotel_still_would_still_have_at_least_one_gopher
+    # Do nothing if this Gopher doesn't have a Hotel
     return if hotel.nil?
 
-    # Prevent destroying this object if the asociated hotel would have no gophers afterwards.
+    # Otherwise stop the deletion if deleting this Gopher would leave the
+    # associated Hotel with 0 Gophers.
     if hotel.gophers.count <= 1
-      # TODO: is it appropriate to add an error here or shoudl I just fail?
-      # errors.add(:base, :hotel_must_have_at_least_one_gopher, message: "Assoicated Hotel must still have at least one Gopher")
+      errors.add(:base,
+        :associated_hotel_would_become_invalid,
+        message: "Destroying this object would leave associated Hotel with invalid relationship"
+      )
+
       throw(:abort)
     end
   end
@@ -973,12 +1008,18 @@ end
 ```ruby
 # demo_app/app/models/hotel.rb
 class Hotel < ApplicationRecord
+  has_many :gophers
+
   # Use a validation to try to "enforce" that a Hotel always has {1..N} Gophers
-  # i.e. **at least** 1 Gopher. This isn't really enforcing because there is a
-  # bunch of Rails API for doing things skipping validations.
-  # Also this only kicks in for operations on Hotel, it won't cover operations on Gopher
+  # i.e. **at least** 1 Gopher. Using a presence validation on the association
+  # is the recommended Rails way to validate that an associated object exists -
+  # see https://guides.rubyonrails.org/active_record_validations.html#presence
+  #
+  # This isn't really "enforcing" because there are ActiveRecord methods which
+  # skip validations.  Also this only works for operations on Hotel - it won't
+  # prevent any operations on Gopher so we must also implement a
+  # `before_destroy` callback in Gopher.
   validates :gophers, presence: true
-  # TODO: is this the right validation? should it be "has at least one" or similar?
 end
 ```
 
@@ -1114,7 +1155,7 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
         expect(Gopher.count).to eq(1)
       end
 
-      it "Deleting a Gopher: Fails if Gopher has a Hotel which has no other Gopher" do
+      it "Deleting a Gopher with #destroy!: Raises ActiveRecord::RecordNotDestroyed if Gopher has a Hotel which has no other Gopher" do
         # Given a a Hotel which has {1} Gopher
         gopher = Gopher.create!
         hotel = Hotel.create!(gophers: [gopher])
@@ -1123,6 +1164,22 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
         # Then it raises an error
         expect { gopher.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
 
+        expect(gopher.errors.full_messages).to eq(["Destroying this object would leave associated Hotel with invalid relationship"])
+
+        # and the original Gopher and Hotel still exist
+        expect(Hotel.count).to eq(1)
+        expect(Gopher.count).to eq(1)
+      end
+
+      it "Deleting a Gopher with #destroy: Fails if Gopher has a Hotel which has no other Gopher" do
+        # Given a a Hotel which has {1} Gopher
+        gopher = Gopher.create!
+        hotel = Hotel.create!(gophers: [gopher])
+
+        # When we attempt to destroy the Gopher it fails
+        expect(gopher.destroy).to eq(false)
+
+        expect(gopher.errors.full_messages).to eq(["Destroying this object would leave associated Hotel with invalid relationship"])
         # and the original Gopher and Hotel still exist
         expect(Hotel.count).to eq(1)
         expect(Gopher.count).to eq(1)
@@ -1242,6 +1299,7 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
       end
     end
 
+    # TODO: finish this
     describe "Deletions" do
       # If deleting a Hotel should automatically delete the corresponding
       # Gopher, see the migration for details on how to implement this.
@@ -1269,7 +1327,7 @@ end
 
 #### Implementation score card:
 
-| Q                                           | A                  |
+| Attribute                                   | Result             |
 | ------------------------------------------- | ------------------ |
 | A has 0..1 B integrity enforced by Database | :white_check_mark: |
 | B has 1..N A integrity enforced by Database | :x:                |

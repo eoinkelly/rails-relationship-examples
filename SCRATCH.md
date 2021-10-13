@@ -1,4 +1,19 @@
 
+1. Refuse to delete the record and raise an exception (common)
+1. Nullify the referencing column (common).
+1. Take No Action (common if any side of the relationship can have 0 items i.e. `0..`).
+    * We need to be careful with this one to ensure we don't leave a DB column with a reference to an ID in another table which no longer exists!
+1. Automatically delete all referencing rows when a row is deleted, also known as a _Cascade delete_ (uncommon)
+
+| Raise error | |
+| Do nothing | |
+| Cascade delete| |
+| Nullify | |
+
+
+jargon
+
+bidirectional relationship
 ### Problem: Explicit inverse_of can't be used everywhere
 
 Rails will attempt to automatically guess the inverse relationship in many cases. This automatic detection fails if
@@ -27,16 +42,20 @@ foreign_key: { on_delete: :restrict }
 
 
 
+deletion behaviour implemntation depends on which side gets the belongs_to
+
+
+
 Planning Phase
 
 1. Choose a relationship
-1. Choose a deletion behaviour
 
-Implement Phase
+within each realationship: Implement Phase
 
 1. Overview
 1. Choose macros and options
 1. Choose which side gets each macro
+1. Choose deletion behaviour
 1. Choose migration options
 1. Add validations and callbacks if required
 

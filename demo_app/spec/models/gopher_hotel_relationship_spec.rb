@@ -84,7 +84,7 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
         expect(Gopher.count).to eq(1)
       end
 
-      it "Deleting a Gopher: Fails if Gopher has a Hotel which has no other Gopher" do
+      it "Deleting a Gopher with #destroy!: Raises ActiveRecord::RecordNotDestroyed if Gopher has a Hotel which has no other Gopher" do
         # Given a a Hotel which has {1} Gopher
         gopher = Gopher.create!
         hotel = Hotel.create!(gophers: [gopher])
@@ -93,6 +93,22 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
         # Then it raises an error
         expect { gopher.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
 
+        expect(gopher.errors.full_messages).to eq(["Destroying this object would leave associated Hotel with invalid relationship"])
+
+        # and the original Gopher and Hotel still exist
+        expect(Hotel.count).to eq(1)
+        expect(Gopher.count).to eq(1)
+      end
+
+      it "Deleting a Gopher with #destroy: Fails if Gopher has a Hotel which has no other Gopher" do
+        # Given a a Hotel which has {1} Gopher
+        gopher = Gopher.create!
+        hotel = Hotel.create!(gophers: [gopher])
+
+        # When we attempt to destroy the Gopher it fails
+        expect(gopher.destroy).to eq(false)
+
+        expect(gopher.errors.full_messages).to eq(["Destroying this object would leave associated Hotel with invalid relationship"])
         # and the original Gopher and Hotel still exist
         expect(Hotel.count).to eq(1)
         expect(Gopher.count).to eq(1)
@@ -212,6 +228,7 @@ RSpec.describe "Gopher {1..N} <--> {0..1} Hotel", type: :model do
       end
     end
 
+    # TODO: finish this
     describe "Deletions" do
       # If deleting a Hotel should automatically delete the corresponding
       # Gopher, see the migration for details on how to implement this.
